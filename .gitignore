@@ -49,6 +49,9 @@ MANIFEST
 .DS_Store
 Thumbs.db
 
+# Project notes (local only)
+topic.md
+
 # Logs
 logs/
 *.log
