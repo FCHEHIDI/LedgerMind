@@ -20,7 +20,33 @@ RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install --no-cache-dir -r requirements/prod.txt
 
 # =============================================================================
-# Stage 2: runner — image minimale de production
+# Stage 2: dev — image de développement avec hot-reload et outils de debug
+FROM python:3.11-slim AS dev
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq-dev \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements/base.txt requirements/dev.txt ./requirements/
+RUN python -m venv /opt/venv \
+    && /opt/venv/bin/pip install --no-cache-dir --upgrade pip \
+    && /opt/venv/bin/pip install --no-cache-dir -r requirements/dev.txt
+
+ENV PATH="/opt/venv/bin:$PATH"
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV DJANGO_SETTINGS_MODULE=config.settings.dev
+
+EXPOSE 8000
+
+# Hot-reload via runserver — code monté en volume dans compose
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+
+# =============================================================================
+# Stage 3: runner — image minimale de production
 FROM python:3.11-slim AS runner
 
 # Utilisateur non-root pour la sécurité
