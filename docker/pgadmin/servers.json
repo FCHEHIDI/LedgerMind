@@ -1,0 +1,14 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "LedgerMind PostgreSQL",
+      "Group": "LedgerMind",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "ledgermind",
+      "Username": "ledger",
+      "SSLMode": "prefer",
+      "PassFile": "/pgpass"
+    }
+  }
+}
