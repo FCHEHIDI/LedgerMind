@@ -1,0 +1,139 @@
+name: CD — Deploy (placeholder)
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "lab/**"
+      - "adr/**"
+      - "**.md"
+
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
+
+# Secrets nécessaires (à configurer dans GitHub → Settings → Secrets):
+# DEPLOY_SSH_KEY        — clé SSH serveur cible
+# DOCKER_REGISTRY_URL   — URL registry (ex: registry.hetzner.com/ledgermind)
+# DOCKER_REGISTRY_USER
+# DOCKER_REGISTRY_TOKEN
+# DATABASE_URL_STAGING
+# DATABASE_URL_PROD
+# SECRET_KEY_STAGING
+# SECRET_KEY_PROD
+
+jobs:
+  # ─────────────────────────────────────────────
+  # 1. CI gate — les tests doivent passer avant deploy
+  # ─────────────────────────────────────────────
+  ci-gate:
+    name: CI gate (lab tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements/lab.txt
+      - run: python -m pytest lab/ -q --tb=short
+
+  # ─────────────────────────────────────────────
+  # 2. Build Docker image (backend Django)
+  # ─────────────────────────────────────────────
+  build:
+    name: Build backend image
+    runs-on: ubuntu-latest
+    needs: ci-gate
+    # Activé quand backend/Dockerfile existe
+    if: false  # TODO: retirer ce guard quand backend/ est prêt
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKER_REGISTRY_URL }}/backend
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+      - name: Login to registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.DOCKER_REGISTRY_URL }}
+          username: ${{ secrets.DOCKER_REGISTRY_USER }}
+          password: ${{ secrets.DOCKER_REGISTRY_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: backend/
+          file: backend/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ─────────────────────────────────────────────
+  # 3. Deploy staging
+  # ─────────────────────────────────────────────
+  deploy-staging:
+    name: Deploy → staging
+    runs-on: ubuntu-latest
+    needs: build
+    environment: staging
+    if: false  # TODO: retirer quand infra prête
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: deploy
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            cd /srv/ledgermind
+            docker compose pull backend
+            docker compose up -d backend celery
+            docker compose exec -T backend python manage.py migrate --no-input
+            docker compose exec -T backend python manage.py collectstatic --no-input
+
+  # ─────────────────────────────────────────────
+  # 4. Deploy production (manuel uniquement)
+  # ─────────────────────────────────────────────
+  deploy-production:
+    name: Deploy → production
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    environment: production   # requiert approbation manuelle dans GitHub
+    if: false  # TODO: retirer quand staging validé
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: deploy
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            cd /srv/ledgermind
+            docker compose pull backend
+            docker compose up -d backend celery
+            docker compose exec -T backend python manage.py migrate --no-input

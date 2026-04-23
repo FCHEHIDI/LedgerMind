@@ -1,0 +1,49 @@
+name: CI — Lab Tests
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "lab/**"
+      - "pytest.ini"
+      - "requirements*.txt"
+      - ".github/workflows/ci.yml"
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "lab/**"
+      - "pytest.ini"
+
+jobs:
+  test:
+    name: pytest lab (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: true
+      matrix:
+        python-version: ["3.11"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements/lab.txt
+
+      - name: Run lab tests
+        run: python -m pytest lab/ -v --tb=short --no-header -q
+
+      - name: Upload coverage (optional)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-results
+          path: .pytest_cache/
+          retention-days: 7
