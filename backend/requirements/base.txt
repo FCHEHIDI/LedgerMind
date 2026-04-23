@@ -12,7 +12,8 @@ django-otp==1.5.4
 qrcode==8.0
 
 # Chiffrement PII — ADR-004
-django-fernet-fields==0.9
+# 0.6 est la dernière version disponible sur PyPI, compatible Django 5 en pratique
+django-fernet-fields==0.6
 
 # Async tasks
 celery==5.4.0
