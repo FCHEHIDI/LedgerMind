@@ -1,0 +1,7 @@
+-r base.txt
+
+# WSGI server
+gunicorn==23.0.0
+
+# Error tracking (optional — SENTRY_DSN env var)
+sentry-sdk==2.19.0

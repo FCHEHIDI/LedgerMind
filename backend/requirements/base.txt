@@ -1,0 +1,30 @@
+# Django + DRF
+Django==5.1.4
+djangorestframework==3.15.2
+djangorestframework-simplejwt==5.3.1
+django-cors-headers==4.4.0
+django-storages[s3]==1.14.4
+boto3==1.35.0
+
+# Auth 2FA admin — ADR-002
+django-two-factor-auth==1.16.0
+django-otp==1.5.4
+qrcode==8.0
+
+# Chiffrement PII — ADR-004
+django-fernet-fields==0.9
+
+# Async tasks
+celery==5.4.0
+redis==5.1.1
+django-celery-beat==2.7.0
+django-celery-results==2.5.1
+
+# PostgreSQL
+psycopg2-binary==2.9.10
+
+# Logging JSON — ADR-005
+python-json-logger==2.0.7
+
+# Storage S3/MinIO
+django-storages==1.14.4
