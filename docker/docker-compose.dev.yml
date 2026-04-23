@@ -1,0 +1,308 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# LedgerMind — docker-compose.dev.yml
+# Isolation réseau : proxy | backend | ai
+# Traefik reverse proxy — seul point d'entrée public
+# ─────────────────────────────────────────────────────────────────────────────
+
+networks:
+  # Trafic HTTP entrant — Traefik + Django (port 8000) + Next.js + MinIO console
+  proxy:
+    driver: bridge
+    name: ledgermind_proxy
+
+  # Données métier — Django + Celery + Postgres + Redis + MinIO + MCP
+  backend:
+    driver: bridge
+    name: ledgermind_backend
+    internal: true  # Pas d'accès Internet direct
+
+  # LLM + outillage IA — Celery workers + Ollama + MCP Rust servers
+  ai:
+    driver: bridge
+    name: ledgermind_ai
+    internal: true  # Ollama ne doit JAMAIS sortir sur Internet
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# VOLUMES
+# ─────────────────────────────────────────────────────────────────────────────
+volumes:
+  postgres-data:
+  minio-data:
+  ollama-data:
+  traefik-certs:
+
+
+services:
+
+  # ── TRAEFIK ────────────────────────────────────────────────────────────────
+  # Seul container exposé sur 80/443 + dashboard dev sur 8080
+  traefik:
+    image: traefik:v3.3
+    container_name: lm_traefik
+    networks: [proxy]
+    ports:
+      - "80:80"
+      - "443:443"
+      - "127.0.0.1:8080:8080"  # Dashboard — localhost only
+    volumes:
+      - ./traefik/traefik.dev.yml:/etc/traefik/traefik.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik-certs:/certs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+
+  # ── DJANGO BACKEND ─────────────────────────────────────────────────────────
+  # proxy (reçoit trafic Traefik) + backend (accès Postgres/Redis/MinIO)
+  django:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+      target: dev
+    container_name: lm_django
+    networks: [proxy, backend]
+    # Pas de ports: — Traefik route via réseau proxy
+    environment:
+      DATABASE_URL: postgres://ledger:${POSTGRES_PASSWORD}@postgres:5432/ledgermind
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      SECRET_KEY: ${SECRET_KEY}
+      DEBUG: "True"
+      ALLOWED_HOSTS: "api.localhost,localhost"
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=ledgermind_proxy"
+      # API routes
+      - "traefik.http.routers.django.rule=Host(`api.localhost`)"
+      - "traefik.http.routers.django.entrypoints=web"
+      - "traefik.http.services.django.loadbalancer.server.port=8000"
+      # /admin — IP allowlist (127.0.0.1 + réseau Docker)
+      - "traefik.http.routers.django-admin.rule=Host(`api.localhost`) && PathPrefix(`/admin`)"
+      - "traefik.http.routers.django-admin.entrypoints=web"
+      - "traefik.http.routers.django-admin.middlewares=admin-ipwl@docker"
+      - "traefik.http.middlewares.admin-ipwl.ipallowlist.sourcerange=127.0.0.1/32,172.16.0.0/12,192.168.0.0/16"
+    restart: unless-stopped
+    volumes:
+      - ../backend:/app  # hot-reload en dev
+
+
+  # ── CELERY WORKER ──────────────────────────────────────────────────────────
+  # backend (accès Postgres/Redis) + ai (accès Ollama + MCP)
+  celery:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+      target: dev
+    container_name: lm_celery
+    command: celery -A config worker -l info -Q default,pdf,llm -c 4
+    networks: [backend, ai]
+    environment:
+      DATABASE_URL: postgres://ledger:${POSTGRES_PASSWORD}@postgres:5432/ledgermind
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      SECRET_KEY: ${SECRET_KEY}
+      OLLAMA_BASE_URL: http://ollama:11434
+      MCP_LEDGER_URL: http://mcp-ledger:3000
+      MCP_DOCUMENTS_URL: http://mcp-documents:3001
+    depends_on:
+      - django
+      - redis
+      - ollama
+    restart: unless-stopped
+    volumes:
+      - ../backend:/app
+
+
+  # ── CELERY BEAT ────────────────────────────────────────────────────────────
+  celery-beat:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+      target: dev
+    container_name: lm_celery_beat
+    command: celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    networks: [backend]
+    environment:
+      DATABASE_URL: postgres://ledger:${POSTGRES_PASSWORD}@postgres:5432/ledgermind
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      SECRET_KEY: ${SECRET_KEY}
+    depends_on:
+      - django
+      - redis
+    restart: unless-stopped
+    volumes:
+      - ../backend:/app
+
+
+  # ── POSTGRESQL ─────────────────────────────────────────────────────────────
+  # backend UNIQUEMENT — invisible depuis proxy et ai
+  postgres:
+    image: postgres:16-alpine
+    container_name: lm_postgres
+    networks: [backend]
+    # Pas de ports: — décommenter uniquement pour accès DBeaver/pgAdmin en dev
+    # ports:
+    #   - "127.0.0.1:5432:5432"
+    environment:
+      POSTGRES_DB: ledgermind
+      POSTGRES_USER: ledger
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # Init SQL : activation RLS + extensions (créé avec backend/)
+      # - ../backend/sql/init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ledger -d ledgermind"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+
+  # ── REDIS ──────────────────────────────────────────────────────────────────
+  # backend + ai — broker Celery + cache Django
+  redis:
+    image: redis:7-alpine
+    container_name: lm_redis
+    networks: [backend, ai]
+    # Pas de ports: exposés
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD}
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+
+  # ── MINIO ──────────────────────────────────────────────────────────────────
+  # backend (accès Django/Celery/MCP) + proxy (console Traefik en dev)
+  minio:
+    image: minio/minio:latest
+    container_name: lm_minio
+    networks: [backend, proxy]
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=ledgermind_proxy"
+      # API S3 — utilisé par Django/Celery via réseau backend (pas besoin Traefik)
+      # Console MinIO — dev uniquement
+      - "traefik.http.routers.minio-console.rule=Host(`minio.localhost`)"
+      - "traefik.http.routers.minio-console.entrypoints=web"
+      - "traefik.http.services.minio-console.loadbalancer.server.port=9001"
+    restart: unless-stopped
+
+
+  # ── OLLAMA ─────────────────────────────────────────────────────────────────
+  # ai UNIQUEMENT — LLM local, jamais accessible depuis proxy
+  ollama:
+    image: ollama/ollama:latest
+    container_name: lm_ollama
+    networks: [ai]
+    # Pas de ports: — uniquement via réseau ai (Celery workers)
+    environment:
+      OLLAMA_HOST: "0.0.0.0"
+    volumes:
+      - ollama-data:/root/.ollama
+    # GPU — décommenter si disponible :
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    restart: unless-stopped
+
+
+  # ── MCP LEDGER (Rust) ──────────────────────────────────────────────────────
+  # backend (Postgres) + ai (Celery workers)
+  # Dockerfile créé avec mcp_servers/ledger/
+  mcp-ledger:
+    build:
+      context: ../mcp_servers/ledger
+      dockerfile: Dockerfile
+    container_name: lm_mcp_ledger
+    networks: [backend, ai]
+    environment:
+      DATABASE_URL: postgres://ledger:${POSTGRES_PASSWORD}@postgres:5432/ledgermind
+      MCP_PORT: "3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    profiles: [mcp]  # docker compose --profile mcp up
+
+
+  # ── MCP DOCUMENTS (Rust) ───────────────────────────────────────────────────
+  mcp-documents:
+    build:
+      context: ../mcp_servers/documents
+      dockerfile: Dockerfile
+    container_name: lm_mcp_documents
+    networks: [backend, ai]
+    environment:
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MCP_PORT: "3001"
+    depends_on:
+      - minio
+    restart: unless-stopped
+    profiles: [mcp]
+
+
+  # ── MCP PDF (Rust) ─────────────────────────────────────────────────────────
+  mcp-pdf:
+    build:
+      context: ../mcp_servers/pdf
+      dockerfile: Dockerfile
+    container_name: lm_mcp_pdf
+    networks: [backend, ai]
+    environment:
+      MCP_PORT: "3002"
+    restart: unless-stopped
+    profiles: [mcp]
+
+
+  # ── MCP COMPLIANCE (Rust) ──────────────────────────────────────────────────
+  mcp-compliance:
+    build:
+      context: ../mcp_servers/compliance
+      dockerfile: Dockerfile
+    container_name: lm_mcp_compliance
+    networks: [backend, ai]
+    environment:
+      DATABASE_URL: postgres://ledger:${POSTGRES_PASSWORD}@postgres:5432/ledgermind
+      MCP_PORT: "3003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    profiles: [mcp]

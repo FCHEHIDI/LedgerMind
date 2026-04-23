@@ -1,0 +1,24 @@
+# Traefik static configuration — développement
+# Fichier monté en :ro dans le container traefik
+
+api:
+  dashboard: true
+  insecure: true  # Dashboard sans auth — DEV UNIQUEMENT (port 8080)
+
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+
+providers:
+  docker:
+    exposedByDefault: false  # Chaque service doit opt-in via label
+    network: ledgermind_proxy  # Réseau Docker sur lequel Traefik lit les labels
+
+log:
+  level: INFO
+
+accessLog:
+  filePath: "/dev/stdout"
+  format: json
