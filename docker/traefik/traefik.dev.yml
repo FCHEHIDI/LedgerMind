@@ -5,6 +5,8 @@ api:
   dashboard: true
   insecure: true  # Dashboard sans auth — DEV UNIQUEMENT (port 8080)
 
+ping: {}  # Requis pour healthcheck "traefik healthcheck"
+
 entryPoints:
   web:
     address: ":80"
