@@ -9,11 +9,12 @@ boto3==1.35.0
 # Auth 2FA admin — ADR-002
 django-two-factor-auth==1.16.0
 django-otp==1.5.4
-qrcode==8.0
+qrcode==7.4.2
+phonenumbers==9.0.28
 
 # Chiffrement PII — ADR-004
-# 0.6 est la dernière version disponible sur PyPI, compatible Django 5 en pratique
-django-fernet-fields==0.6
+# Implémentation locale dans backend/fernet_fields/ (shim Django 5 compatible)
+# django-fernet-fields supprimé : utilise force_text retiré dans Django 4
 
 # Async tasks
 celery==5.4.0

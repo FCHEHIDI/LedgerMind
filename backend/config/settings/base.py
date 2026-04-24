@@ -48,7 +48,6 @@ THIRD_PARTY_APPS = [
     "corsheaders",
     "django_celery_beat",
     "django_celery_results",
-    "django_two_factor_auth",  # admin 2FA — ADR-002
     "django_otp",
     "django_otp.plugins.otp_totp",
     "django_otp.plugins.otp_static",
