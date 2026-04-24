@@ -15,6 +15,7 @@ from django.db import models
 from fernet_fields import EncryptedCharField, EncryptedTextField
 
 from apps.tenants.models import Organization
+from core.managers import TenantManager
 
 
 class Invoice(models.Model):
@@ -38,6 +39,8 @@ class Invoice(models.Model):
         ("rejected", "Rejeté"),
         ("error", "Erreur"),
     ]
+
+    objects = TenantManager()
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     org = models.ForeignKey(
@@ -99,6 +102,8 @@ class ProcessingJob(models.Model):
         ("llm", "Queue LLM"),
         ("default", "Queue par défaut"),
     ]
+
+    objects = TenantManager()
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     org = models.ForeignKey(

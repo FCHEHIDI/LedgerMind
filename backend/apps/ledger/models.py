@@ -18,6 +18,7 @@ from django.db import models
 
 from apps.documents.models import Invoice
 from apps.tenants.models import Organization
+from core.managers import TenantManager
 
 
 class JournalEntry(models.Model):
@@ -32,6 +33,8 @@ class JournalEntry(models.Model):
         ("posted", "Comptabilisé"),
         ("cancelled", "Annulé"),
     ]
+
+    objects = TenantManager()
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     org = models.ForeignKey(
@@ -71,6 +74,8 @@ class AccountEntry(models.Model):
     Contrainte: pour une JournalEntry, sum(debit) == sum(credit).
     Cette contrainte est vérifiée au niveau applicatif dans le serializer DRF.
     """
+
+    objects = TenantManager()
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     org = models.ForeignKey(
