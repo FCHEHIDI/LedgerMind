@@ -202,6 +202,15 @@ class JournalEntryViewSet(
         entry.save(update_fields=["status", "updated_at"])
         logger.info("journal.validated entry_id=%s org_id=%s", entry.id, entry.org_id)
 
+        from apps.ledger.models import JournalEntryAudit
+        JournalEntryAudit.objects.create(
+            entry=entry,
+            action=JournalEntryAudit.ACTION_VALIDATED,
+            from_status="draft",
+            to_status="posted",
+            performed_by=request.user,
+        )
+
         serializer = self.get_serializer(entry)
         return Response(serializer.data)
 
@@ -232,8 +241,413 @@ class JournalEntryViewSet(
         entry.save(update_fields=["status", "updated_at"])
         logger.info("journal.cancelled entry_id=%s org_id=%s", entry.id, entry.org_id)
 
+        from apps.ledger.models import JournalEntryAudit
+        JournalEntryAudit.objects.create(
+            entry=entry,
+            action=JournalEntryAudit.ACTION_CANCELLED,
+            from_status="draft",
+            to_status="cancelled",
+            performed_by=request.user,
+        )
+
         serializer = self.get_serializer(entry)
         return Response(serializer.data)
+
+    # ------------------------------------------------------------------
+    # FEC Export — ADR-010
+    # ------------------------------------------------------------------
+
+    def _get_fec_queryset(self, request, date_from, date_to):
+        """Retourne le QuerySet d'écritures pour le FEC.
+
+        Args:
+            request: Requête HTTP authentifiée.
+            date_from: date de début (inclusive).
+            date_to: date de fin (inclusive).
+
+        Returns:
+            QuerySet JournalEntry filtré, préfiltré posted.
+        """
+        org_id = _get_current_org_id(request)
+        if org_id is None:
+            return JournalEntry.objects.none()
+        return (
+            JournalEntry.objects
+            .for_org(org_id)
+            .filter(status="posted", entry_date__gte=date_from, entry_date__lte=date_to)
+            .prefetch_related("lines", "invoice")
+            .order_by("entry_date", "reference")
+        )
+
+    @action(detail=False, methods=["get"], url_path="export/fec")
+    def export_fec(self, request):
+        """Génère et retourne le Fichier des Écritures Comptables (FEC).
+
+        Format DGFiP — ADR-010 :
+          - Encodage UTF-8
+          - Séparateur pipe |
+          - Terminateur CRLF
+          - 18 colonnes
+          - Uniquement les écritures status=posted
+
+        Query params:
+          from (str): Date début YYYY-MM-DD (défaut: 1er janv. de l'année courante)
+          to   (str): Date fin YYYY-MM-DD (défaut: aujourd'hui)
+
+        Returns:
+            Response 200 text/plain attachment.
+            Response 400 si dates invalides.
+        """
+        import csv
+        import io
+        from datetime import date, datetime
+        from django.http import StreamingHttpResponse
+
+        today = date.today()
+        raw_from = request.query_params.get("from", f"{today.year}-01-01")
+        raw_to = request.query_params.get("to", today.isoformat())
+
+        try:
+            date_from = datetime.strptime(raw_from, "%Y-%m-%d").date()
+            date_to = datetime.strptime(raw_to, "%Y-%m-%d").date()
+        except ValueError:
+            return Response(
+                {"error": "INVALID_DATE", "detail": "Utilisez le format YYYY-MM-DD."},
+                status=400,
+            )
+
+        if date_from > date_to:
+            return Response(
+                {"error": "INVALID_RANGE", "detail": "'from' doit être antérieur à 'to'."},
+                status=400,
+            )
+
+        entries = self._get_fec_queryset(request, date_from, date_to)
+        rows = _build_fec_lines(entries)
+
+        # Build FEC content in-memory (UTF-8, pipe-separated, CRLF)
+        buf = io.StringIO()
+        writer = csv.writer(
+            buf, delimiter="|", lineterminator="\r\n",
+            quoting=csv.QUOTE_NONE, escapechar="\\"
+        )
+        writer.writerow([
+            "JournalCode", "JournalLib", "EcritureNum", "EcritureDate",
+            "CompteNum", "CompteLib", "CompAuxNum", "CompAuxLib",
+            "PieceRef", "PieceDate", "EcritureLib", "Debit", "Credit",
+            "EcritureLet", "DateLet", "ValidDate", "Montantdevise", "Idevise",
+        ])
+        for row in rows:
+            # Sanitize: no pipe characters allowed inside values (DGFiP spec)
+            writer.writerow([v.replace("|", " ") for v in row])
+
+        content = buf.getvalue()
+
+        # Resolve SIREN from org
+        org_id = _get_current_org_id(request)
+        from apps.tenants.models import Organization as _Org
+        try:
+            org = _Org.objects.get(id=org_id)
+            siren = (org.siren or "000000000").replace(" ", "")[:9]
+        except _Org.DoesNotExist:
+            siren = "000000000"
+
+        filename = f"{siren}FEC{date_to.strftime('%Y%m%d')}.txt"
+        logger.info(
+            "fec.export org_id=%s from=%s to=%s lines=%s filename=%s",
+            org_id, date_from, date_to, len(rows), filename,
+        )
+
+        response = StreamingHttpResponse(
+            iter([content.encode("utf-8")]),
+            content_type="text/plain; charset=utf-8",
+        )
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+
+    @action(detail=False, methods=["get"], url_path="export/fec/validate")
+    def validate_fec(self, request):
+        """Valide le FEC avant remise au DGFiP.
+
+        Vérifie la balance générale (∑ Débit == ∑ Crédit) et l'absence
+        de lignes avec Debit=0 ET Credit=0.
+
+        Query params:
+          from (str): Date début YYYY-MM-DD
+          to   (str): Date fin YYYY-MM-DD
+
+        Returns:
+            Response 200:
+              {
+                "is_valid": bool,
+                "total_lines": int,
+                "total_debit": "decimal",
+                "total_credit": "decimal",
+                "balance_ok": bool,
+                "errors": [str]
+              }
+        """
+        from datetime import date, datetime
+        from decimal import Decimal
+
+        today = date.today()
+        raw_from = request.query_params.get("from", f"{today.year}-01-01")
+        raw_to = request.query_params.get("to", today.isoformat())
+
+        try:
+            date_from = datetime.strptime(raw_from, "%Y-%m-%d").date()
+            date_to = datetime.strptime(raw_to, "%Y-%m-%d").date()
+        except ValueError:
+            return Response(
+                {"error": "INVALID_DATE", "detail": "Utilisez le format YYYY-MM-DD."},
+                status=400,
+            )
+
+        entries = self._get_fec_queryset(request, date_from, date_to)
+        rows = _build_fec_lines(entries)
+
+        errors: list[str] = []
+        total_debit = Decimal("0.00")
+        total_credit = Decimal("0.00")
+
+        for row in rows:
+            debit = Decimal(row[11])
+            credit = Decimal(row[12])
+            ecriture_num = row[2]
+
+            if debit == Decimal("0") and credit == Decimal("0"):
+                errors.append(f"EcritureNum {ecriture_num}: Debit=0 ET Credit=0 interdit.")
+
+            total_debit += debit
+            total_credit += credit
+
+        balance_ok = total_debit == total_credit
+        if not balance_ok:
+            errors.append(
+                f"Déséquilibre général : ∑ Débit={total_debit} ≠ ∑ Crédit={total_credit}."
+            )
+
+        return Response({
+            "is_valid": len(errors) == 0,
+            "total_lines": len(rows),
+            "total_debit": str(total_debit),
+            "total_credit": str(total_credit),
+            "balance_ok": balance_ok,
+            "errors": errors,
+        })
+
+    # ------------------------------------------------------------------
+    # Extourne — ADR-009
+    # ------------------------------------------------------------------
+
+    @action(detail=True, methods=["post"], url_path="reverse")
+    def reverse_entry(self, request, pk=None):
+        """Crée une écriture d'extourne (contre-écriture) à partir d'une écriture postée.
+
+        L'écriture originale reste `posted` et immuable.
+        Une nouvelle écriture `draft` est créée avec les débits/crédits inversés.
+        L'opérateur doit ensuite valider la contre-écriture.
+
+        Request body:
+          {
+            "reason": "Facture annulée par le fournisseur",   // requis
+            "reversal_date": "2026-04-30"                     // optionnel, défaut: aujourd'hui
+          }
+
+        Returns:
+            Response 201 avec la nouvelle JournalEntry draft (extourne).
+            Response 400 si préconditions non remplies.
+        """
+        from datetime import date, datetime
+        from decimal import Decimal
+
+        entry = self.get_object()
+
+        if entry.status != "posted":
+            return Response(
+                {
+                    "error": "INVALID_STATUS",
+                    "detail": "Seules les écritures validées (posted) peuvent être extournées.",
+                },
+                status=400,
+            )
+
+        reason = (request.data.get("reason") or "").strip()
+        if not reason:
+            return Response(
+                {"error": "REASON_REQUIRED", "detail": "Le motif de l'extourne est obligatoire."},
+                status=400,
+            )
+
+        raw_date = request.data.get("reversal_date")
+        if raw_date:
+            try:
+                reversal_date = datetime.strptime(raw_date, "%Y-%m-%d").date()
+            except ValueError:
+                return Response(
+                    {"error": "INVALID_DATE", "detail": "Format attendu: YYYY-MM-DD."},
+                    status=400,
+                )
+        else:
+            reversal_date = date.today()
+
+        lines = list(entry.lines.all())
+        if not lines:
+            return Response(
+                {"error": "NO_LINES", "detail": "L'écriture ne contient aucune ligne."},
+                status=400,
+            )
+
+        # Create the reversal entry
+        from apps.ledger.models import AccountEntry, JournalEntryAudit
+
+        reversal_reference = f"EXT-{entry.reference or str(entry.id)[:8]}"
+
+        reversal = JournalEntry.objects.create(
+            org=entry.org,
+            invoice=entry.invoice,
+            reference=reversal_reference[:100],
+            journal_code=entry.journal_code,
+            entry_date=reversal_date,
+            status="draft",
+        )
+
+        # Invert debit/credit on each line
+        for line in lines:
+            AccountEntry.objects.create(
+                org=entry.org,
+                journal_entry=reversal,
+                account_code=line.account_code,
+                account_label=line.account_label,
+                debit=line.credit,   # inverted
+                credit=line.debit,   # inverted
+            )
+
+        # Audit trail on the original entry
+        JournalEntryAudit.objects.create(
+            entry=entry,
+            action=JournalEntryAudit.ACTION_REVERSED,
+            from_status="posted",
+            to_status="posted",
+            performed_by=request.user,
+            reason=reason[:500],
+        )
+        # Audit trail on the new reversal entry
+        JournalEntryAudit.objects.create(
+            entry=reversal,
+            action=JournalEntryAudit.ACTION_CREATED,
+            from_status="",
+            to_status="draft",
+            performed_by=request.user,
+            reason=f"Extourne de {entry.id}: {reason}"[:500],
+        )
+
+        logger.info(
+            "journal.reversed original=%s reversal=%s org=%s",
+            entry.id, reversal.id, entry.org_id,
+        )
+
+        serializer = self.get_serializer(reversal)
+        return Response(serializer.data, status=201)
+
+
+_JOURNAL_LABELS: dict[str, str] = {
+    "ACH": "Achats",
+    "VTE": "Ventes",
+    "BQ": "Banque",
+    "OD": "Opérations diverses",
+    "AN": "À-nouveaux",
+    "PAI": "Paiements",
+}
+
+# Comptes collectifs tiers (fournisseurs / clients) — nécessitent CompAuxNum
+_TIERS_PREFIXES = ("401", "411")
+
+
+def _fec_date(d) -> str:
+    """Formate une date en AAAAMMJJ pour le FEC.
+
+    Args:
+        d: date ou None.
+
+    Returns:
+        Chaîne AAAAMMJJ ou vide.
+    """
+    if d is None:
+        return ""
+    return d.strftime("%Y%m%d")
+
+
+def _fec_amount(value) -> str:
+    """Formate un montant en 2 décimales avec point.
+
+    Args:
+        value: Decimal ou numérique.
+
+    Returns:
+        Chaîne ex: '1200.00'.
+    """
+    from decimal import Decimal
+    return f"{Decimal(value):.2f}"
+
+
+def _build_fec_lines(entries) -> list[list[str]]:
+    """Construit les lignes FEC (hors en-tête) depuis les JournalEntry.
+
+    Chaque AccountEntry génère une ligne FEC.
+    Les colonnes respectent strictement l'ADR-010 / spécification DGFiP.
+
+    Args:
+        entries: QuerySet de JournalEntry avec prefetch_related('lines', 'invoice').
+
+    Returns:
+        Liste de listes de 18 valeurs (str) triées par date puis référence.
+    """
+    rows: list[list[str]] = []
+
+    for entry in entries:
+        journal_lib = _JOURNAL_LABELS.get(entry.journal_code, entry.journal_code)
+        piece_ref = entry.reference or str(entry.id)[:8]
+        piece_date = _fec_date(entry.entry_date)
+        valid_date = _fec_date(entry.updated_at.date() if entry.updated_at else entry.entry_date)
+        ecriture_lib = f"{journal_lib} — {piece_ref}"
+
+        # Données tiers issues de la facture liée (peut être null)
+        invoice = getattr(entry, "invoice", None)
+        vendor_name = (invoice.vendor_name if invoice and hasattr(invoice, "vendor_name") else "") or ""
+        inv_number = (invoice.invoice_number if invoice and hasattr(invoice, "invoice_number") else "") or ""
+
+        for line in entry.lines.all():
+            # Compte auxiliaire : requis pour comptes collectifs 401/411
+            comp_aux_num = ""
+            comp_aux_lib = ""
+            if line.account_code.startswith(_TIERS_PREFIXES):
+                comp_aux_num = inv_number[:20] if inv_number else piece_ref[:20]
+                comp_aux_lib = vendor_name[:99] if vendor_name else ""
+
+            row = [
+                entry.journal_code[:6],          # 1  JournalCode
+                journal_lib[:99],                  # 2  JournalLib
+                piece_ref[:10],                    # 3  EcritureNum
+                piece_date,                        # 4  EcritureDate
+                line.account_code[:20],            # 5  CompteNum
+                (line.account_label or line.account_code)[:99],  # 6  CompteLib
+                comp_aux_num,                      # 7  CompAuxNum
+                comp_aux_lib,                      # 8  CompAuxLib
+                piece_ref[:99],                    # 9  PieceRef
+                piece_date,                        # 10 PieceDate
+                ecriture_lib[:99],                 # 11 EcritureLib
+                _fec_amount(line.debit),           # 12 Debit
+                _fec_amount(line.credit),          # 13 Credit
+                "",                                # 14 EcritureLet
+                "",                                # 15 DateLet
+                valid_date,                        # 16 ValidDate
+                "",                                # 17 Montantdevise
+                "",                                # 18 Idevise
+            ]
+            rows.append(row)
+
+    return rows
 
 
 class DashboardMetricsView(APIView):

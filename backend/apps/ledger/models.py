@@ -2,8 +2,9 @@
 apps/ledger — Écritures comptables et plan de comptes.
 
 Models:
-  JournalEntry   — Écriture comptable (pièce)
-  AccountEntry   — Ligne de l'écriture (débit/crédit)
+  JournalEntry       — Écriture comptable (pièce)
+  AccountEntry       — Ligne de l'écriture (débit/crédit)
+  JournalEntryAudit  — Audit trail des transitions de statut (ADR-009)
 
 ADR-001: org_id (ForeignKey Organization) sur tous les modèles.
 ADR-004: Les montants dans JournalEntry/AccountEntry ne sont PAS chiffrés
@@ -14,6 +15,7 @@ ADR-005: __str__ n'inclut jamais les montants, uniquement les UUIDs.
 import uuid
 from decimal import Decimal
 
+from django.conf import settings
 from django.db import models
 
 from apps.documents.models import Invoice
@@ -102,3 +104,50 @@ class AccountEntry(models.Model):
     def __str__(self) -> str:
         # No amounts in __str__ — ADR-005
         return f"AccountEntry {self.id} [{self.account_code}]"
+
+
+class JournalEntryAudit(models.Model):
+    """Audit trail des transitions de statut sur les écritures comptables.
+
+    Chaque appel à validate() ou cancel() crée un enregistrement immuable.
+    Conforme ADR-009 : aucune donnée métier (montants, comptes) n'est stockée.
+    """
+
+    ACTION_CREATED = "created"
+    ACTION_VALIDATED = "validated"
+    ACTION_CANCELLED = "cancelled"
+    ACTION_REVERSED = "reversed"
+
+    ACTION_CHOICES = [
+        (ACTION_CREATED, "Créée"),
+        (ACTION_VALIDATED, "Validée"),
+        (ACTION_CANCELLED, "Annulée"),
+        (ACTION_REVERSED, "Extournée"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    entry = models.ForeignKey(
+        JournalEntry,
+        on_delete=models.CASCADE,
+        related_name="audit_logs",
+    )
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES, db_index=True)
+    from_status = models.CharField(max_length=20, blank=True)
+    to_status = models.CharField(max_length=20, blank=True)
+    performed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="journal_audit_logs",
+    )
+    performed_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    # Optional free-text reason — stored only for reversals (ADR-005: no PII)
+    reason = models.TextField(blank=True)
+
+    class Meta:
+        db_table = "ledger_journalentryaudit"
+        ordering = ["performed_at"]
+
+    def __str__(self) -> str:
+        return f"Audit {self.action} entry={self.entry_id} by={self.performed_by_id}"

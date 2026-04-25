@@ -2,6 +2,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import ValidateButtons from "./ValidateButtons";
+import ReverseButton from "./ReverseButton";
 
 const API_BASE =
   process.env.DJANGO_INTERNAL_URL ??
@@ -128,6 +129,11 @@ export default async function JournalEntryDetailPage({
         {entry.status === "draft" && (
           <div className="ml-auto">
             <ValidateButtons entryId={entry.id} />
+          </div>
+        )}
+        {entry.status === "posted" && (
+          <div className="ml-auto">
+            <ReverseButton entryId={entry.id} />
           </div>
         )}
       </div>

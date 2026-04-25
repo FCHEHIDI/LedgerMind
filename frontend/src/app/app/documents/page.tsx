@@ -66,18 +66,29 @@ export default async function DocumentsPage() {
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       {/* Header */}
-      <div>
-        <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
-          Documents
-        </h1>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-          Importez une facture PDF pour lancer le traitement automatique par les
-          agents IA.
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+            Documents
+          </h1>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+            Importez une facture PDF pour lancer le traitement automatique par les
+            agents IA.
+          </p>
+        </div>
+        {invoices.some((inv) => ["pending", "processing"].includes(inv.status)) && (
+          <span className="flex items-center gap-1.5 rounded-full bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 px-3 py-1 text-xs font-medium text-blue-700 dark:text-blue-400">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
+            </span>
+            Traitement en cours…
+          </span>
+        )}
       </div>
 
-      {/* Upload zone (Client Component) */}
-      <DocumentsClient />
+      {/* Upload zone (Client Component) — hasPending drives auto-polling */}
+      <DocumentsClient hasPending={invoices.some((inv) => ["pending", "processing"].includes(inv.status))} />
 
       {/* Invoice list */}
       {invoices.length === 0 ? (

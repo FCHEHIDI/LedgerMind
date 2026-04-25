@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
+import FecExportButton from "./FecExportButton";
 
 const API_BASE =
   process.env.DJANGO_INTERNAL_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://api.localhost:8888";
@@ -95,12 +96,15 @@ export default async function LedgerPage() {
             {data ? `${data.count} écriture${data.count !== 1 ? "s" : ""}` : "—"}
           </p>
         </div>
-        <Link
-          href="/app/ledger/new"
-          className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 dark:bg-zinc-50 px-4 py-2 text-sm font-medium text-zinc-50 dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors"
-        >
-          + Nouvelle écriture
-        </Link>
+        <div className="flex items-center gap-3">
+          <FecExportButton />
+          <Link
+            href="/app/ledger/new"
+            className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 dark:bg-zinc-50 px-4 py-2 text-sm font-medium text-zinc-50 dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors"
+          >
+            + Nouvelle écriture
+          </Link>
+        </div>
       </div>
 
       {/* Tableau */}

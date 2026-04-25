@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import UploadForm from "./UploadForm";
 
@@ -11,15 +11,28 @@ interface UploadResult {
   message: string;
 }
 
+interface Props {
+  /** True when at least one invoice is in pending/processing state — triggers auto-polling. */
+  hasPending: boolean;
+}
+
 /**
  * Client wrapper that handles upload success notifications and page refresh.
  *
  * Uses router.refresh() to re-fetch the invoice list from the Server Component
- * without a full page navigation.
+ * without a full page navigation. When hasPending is true, polls every 3 s
+ * until all jobs reach a terminal state.
  */
-export default function DocumentsClient() {
+export default function DocumentsClient({ hasPending }: Props) {
   const router = useRouter();
   const [successBanner, setSuccessBanner] = useState<UploadResult | null>(null);
+
+  // Auto-refresh while invoices are still being processed
+  useEffect(() => {
+    if (!hasPending) return;
+    const id = setInterval(() => router.refresh(), 3000);
+    return () => clearInterval(id);
+  }, [hasPending, router]);
 
   function handleSuccess(result: UploadResult) {
     setSuccessBanner(result);

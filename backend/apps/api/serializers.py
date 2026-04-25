@@ -18,7 +18,7 @@ from django.conf import settings
 from rest_framework import serializers
 
 from apps.documents.models import Invoice, ProcessingJob
-from apps.ledger.models import AccountEntry, JournalEntry
+from apps.ledger.models import AccountEntry, JournalEntry, JournalEntryAudit
 from apps.tenants.models import Organization
 
 logger = logging.getLogger("apps.api.serializers")
@@ -104,6 +104,33 @@ class InvoiceSerializer(serializers.ModelSerializer):
         return super().update(instance, validated_data)
 
 
+class JournalEntryAuditSerializer(serializers.ModelSerializer):
+    """Serializer read-only pour l'audit trail d'une écriture."""
+
+    performed_by_username = serializers.SerializerMethodField()
+
+    class Meta:
+        model = JournalEntryAudit
+        fields = [
+            "id", "action", "from_status", "to_status",
+            "performed_by", "performed_by_username", "performed_at", "reason",
+        ]
+        read_only_fields = fields
+
+    def get_performed_by_username(self, obj: JournalEntryAudit) -> str | None:
+        """Retourne le username de l'acteur (jamais le mot de passe).
+
+        Args:
+            obj: Instance JournalEntryAudit.
+
+        Returns:
+            Username ou None.
+        """
+        if obj.performed_by_id is None:
+            return None
+        return getattr(obj.performed_by, "username", None)
+
+
 class AccountEntrySerializer(serializers.ModelSerializer):
     """Serializer pour une ligne d'écriture comptable."""
 
@@ -138,6 +165,7 @@ class JournalEntrySerializer(serializers.ModelSerializer):
     """
 
     lines = AccountEntrySerializer(many=True)
+    audit_logs = JournalEntryAuditSerializer(many=True, read_only=True)
 
     class Meta:
         model = JournalEntry
@@ -149,9 +177,10 @@ class JournalEntrySerializer(serializers.ModelSerializer):
             "status",
             "invoice",
             "lines",
+            "audit_logs",
             "created_at",
         ]
-        read_only_fields = ["id", "status", "created_at"]
+        read_only_fields = ["id", "status", "audit_logs", "created_at"]
 
     def validate(self, attrs: dict) -> dict:
         """Valide l'équilibre débit == crédit de l'écriture.
@@ -187,10 +216,22 @@ class JournalEntrySerializer(serializers.ModelSerializer):
         Returns:
             Instance JournalEntry créée avec ses AccountEntry.
         """
+        from apps.ledger.models import JournalEntryAudit
         lines_data = validated_data.pop("lines")
         org = validated_data["org"]
         entry = JournalEntry.objects.create(**validated_data)
         for line_data in lines_data:
             AccountEntry.objects.create(journal_entry=entry, org=org, **line_data)
+
+        # Audit trail — ADR-009
+        request = self.context.get("request")
+        JournalEntryAudit.objects.create(
+            entry=entry,
+            action=JournalEntryAudit.ACTION_CREATED,
+            from_status="",
+            to_status="draft",
+            performed_by=request.user if request else None,
+        )
+
         logger.info("journal.created id=%s lines=%d", entry.id, len(lines_data))
         return entry
