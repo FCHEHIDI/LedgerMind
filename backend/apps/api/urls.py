@@ -20,12 +20,20 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 
-from .views import DashboardMetricsView, DocumentUploadView, InvoiceViewSet, JournalEntryViewSet, OrganizationViewSet
+from .views import (
+    BatchDocumentUploadView, BankReconciliationViewSet, BilanView,
+    ChartOfAccountsViewSet, CompteDeResultatView, DashboardMetricsView,
+    DocumentUploadView, InvoiceViewSet, JournalEntryViewSet,
+    LetterageViewSet, OrganizationViewSet, TvaCA3View,
+)
 
 router = DefaultRouter()
 router.register(r"invoices", InvoiceViewSet, basename="invoice")
 router.register(r"journal", JournalEntryViewSet, basename="journal")
 router.register(r"organizations", OrganizationViewSet, basename="organization")
+router.register(r"lettrage", LetterageViewSet, basename="lettrage")
+router.register(r"bank-statements", BankReconciliationViewSet, basename="bank-statement")
+router.register(r"chart", ChartOfAccountsViewSet, basename="chart")
 
 urlpatterns = [
     # JWT auth — ADR-002
@@ -46,5 +54,9 @@ urlpatterns = [
     ),
     path("dashboard/metrics/", DashboardMetricsView.as_view(), name="dashboard-metrics"),
     path("documents/upload/", DocumentUploadView.as_view(), name="document-upload"),
+    path("documents/upload/batch/", BatchDocumentUploadView.as_view(), name="document-upload-batch"),
+    path("tva/ca3/", TvaCA3View.as_view(), name="tva-ca3"),
+    path("reports/compte-de-resultat/", CompteDeResultatView.as_view(), name="compte-de-resultat"),
+    path("reports/bilan/", BilanView.as_view(), name="bilan"),
     path("", include(router.urls)),
 ]

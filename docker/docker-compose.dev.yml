@@ -98,6 +98,7 @@ services:
       - "traefik.http.routers.django-admin.entrypoints=web"
       - "traefik.http.routers.django-admin.middlewares=admin-ipwl@docker"
       - "traefik.http.middlewares.admin-ipwl.ipallowlist.sourcerange=127.0.0.1/32,172.16.0.0/12,192.168.0.0/16"
+    command: python manage.py runserver 0.0.0.0:8000 --noreload
     restart: unless-stopped
     volumes:
       - ../backend:/app  # hot-reload en dev
@@ -123,6 +124,9 @@ services:
       OLLAMA_BASE_URL: http://ollama:11434
       MCP_LEDGER_URL: http://mcp-ledger:3000
       MCP_DOCUMENTS_URL: http://mcp-documents:3001
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
     depends_on:
       - django
       - redis
