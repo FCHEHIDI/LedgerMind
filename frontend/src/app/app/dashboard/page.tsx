@@ -1,6 +1,9 @@
 import { cookies } from "next/headers";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://api.localhost:8888";
+// Les Server Components appellent Django directement (réseau interne Docker ou loopback)
+// → pas de CORS car c'est serveur→serveur
+const API_BASE =
+  process.env.DJANGO_INTERNAL_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 interface DashboardMetrics {
   total_journal_entries: number;
