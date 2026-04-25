@@ -32,6 +32,7 @@ volumes:
   ollama-data:
   traefik-certs:
   pgadmin-data:
+  frontend_node_modules:
 
 
 services:
@@ -342,3 +343,26 @@ services:
         condition: service_healthy
     restart: unless-stopped
     profiles: [mcp]
+
+
+  # ── FRONTEND (Next.js 15) ──────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile.dev
+    container_name: lm_frontend
+    networks: [proxy]
+    volumes:
+      - ../frontend:/app
+      - frontend_node_modules:/app/node_modules
+    environment:
+      NODE_ENV: development
+      NEXT_PUBLIC_API_URL: http://api.localhost:8888
+      WATCHPACK_POLLING: "true"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=ledgermind_proxy"
+      - "traefik.http.routers.frontend.rule=Host(`localhost`) || Host(`app.localhost`)"
+      - "traefik.http.routers.frontend.entrypoints=web"
+      - "traefik.http.services.frontend.loadbalancer.server.port=3000"
+    restart: unless-stopped
