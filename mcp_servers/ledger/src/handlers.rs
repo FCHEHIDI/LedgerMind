@@ -8,6 +8,16 @@ use uuid::Uuid;
 
 use crate::db::AppState;
 
+/// Ligne renvoyée par les requêtes journal.
+#[derive(sqlx::FromRow)]
+struct JournalEntryRow {
+    id: Uuid,
+    reference: String,
+    journal_code: String,
+    entry_date: String,
+    status: String,
+}
+
 /// Endpoint de santé.
 pub async fn health() -> Json<Value> {
     Json(json!({ "status": "ok", "service": "mcp-ledger" }))
@@ -74,16 +84,14 @@ async fn list_entries(
     _params: Option<Value>,
 ) -> anyhow::Result<Value> {
     // Double protection: WHERE org_id = $1 + PostgreSQL RLS — ADR-001
-    let rows = sqlx::query!(
-        r#"
-        SELECT id, reference, journal_code, entry_date, status
-        FROM ledger_journalentry
-        WHERE org_id = $1
-        ORDER BY entry_date DESC
-        LIMIT 100
-        "#,
-        org_id
+    let rows = sqlx::query_as::<_, JournalEntryRow>(
+        "SELECT id, reference, journal_code, entry_date::text AS entry_date, status \
+         FROM ledger_journalentry \
+         WHERE org_id = $1 \
+         ORDER BY entry_date DESC \
+         LIMIT 100",
     )
+    .bind(org_id)
     .fetch_all(&state.pool)
     .await?;
 
@@ -94,7 +102,7 @@ async fn list_entries(
                 "id": r.id,
                 "reference": r.reference,
                 "journal_code": r.journal_code,
-                "entry_date": r.entry_date.to_string(),
+                "entry_date": r.entry_date,
                 "status": r.status,
             })
         })
@@ -116,15 +124,13 @@ async fn get_entry(
 
     let entry_id = Uuid::parse_str(id_str)?;
 
-    let row = sqlx::query!(
-        r#"
-        SELECT id, reference, journal_code, entry_date, status
-        FROM ledger_journalentry
-        WHERE id = $1 AND org_id = $2
-        "#,
-        entry_id,
-        org_id
+    let row = sqlx::query_as::<_, JournalEntryRow>(
+        "SELECT id, reference, journal_code, entry_date::text AS entry_date, status \
+         FROM ledger_journalentry \
+         WHERE id = $1 AND org_id = $2",
     )
+    .bind(entry_id)
+    .bind(org_id)
     .fetch_optional(&state.pool)
     .await?;
 
@@ -133,7 +139,7 @@ async fn get_entry(
             "id": r.id,
             "reference": r.reference,
             "journal_code": r.journal_code,
-            "entry_date": r.entry_date.to_string(),
+            "entry_date": r.entry_date,
             "status": r.status,
         })),
         None => Err(anyhow::anyhow!("entry not found")),

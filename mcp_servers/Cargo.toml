@@ -43,7 +43,7 @@ aws-sdk-s3 = "1"
 aws-config = "1"
 
 # UUID
-uuid = { version = "1", features = ["v4"] }
+uuid = { version = "1", features = ["v4", "serde"] }
 
 # Configuration
 config = "0.14"
