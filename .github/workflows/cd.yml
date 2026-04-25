@@ -52,8 +52,6 @@ jobs:
     name: Build backend image
     runs-on: ubuntu-latest
     needs: ci-gate
-    # Activé quand backend/Dockerfile existe
-    if: false  # TODO: retirer ce guard quand backend/ est prêt
 
     outputs:
       image_tag: ${{ steps.meta.outputs.tags }}
@@ -95,7 +93,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     environment: staging
-    if: false  # TODO: retirer quand infra prête
 
     steps:
       - uses: actions/checkout@v4
@@ -121,7 +118,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: deploy-staging
     environment: production   # requiert approbation manuelle dans GitHub
-    if: false  # TODO: retirer quand staging validé
 
     steps:
       - uses: actions/checkout@v4
