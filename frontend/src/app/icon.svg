@@ -1,0 +1,58 @@
+<svg width="256" height="256" viewBox="0 0 256 256"
+     xmlns="http://www.w3.org/2000/svg">
+  <!-- Fond -->
+  <defs>
+    <radialGradient id="bgGrad" cx="50%" cy="40%" r="70%">
+      <stop offset="0%" stop-color="#006644"/>
+      <stop offset="100%" stop-color="#001814"/>
+    </radialGradient>
+  </defs>
+
+  <circle cx="128" cy="128" r="112" fill="url(#bgGrad)" />
+
+  <!-- Anneau -->
+  <circle cx="128" cy="128" r="108"
+          fill="none" stroke="#00FF88" stroke-width="4" />
+  <circle cx="128" cy="128" r="96"
+          fill="none" stroke="#00CC77" stroke-width="2" />
+
+  <!-- Circuits stylisés -->
+  <!-- Branche gauche -->
+  <path d="M64 150 L90 150 L104 136"
+        fill="none" stroke="#00FF88" stroke-width="3"
+        stroke-linecap="round" stroke-linejoin="round" />
+  <circle cx="64" cy="150" r="4" fill="#00FF88" />
+  <circle cx="90" cy="150" r="3" fill="#00FF88" />
+
+  <!-- Branche droite -->
+  <path d="M192 112 L166 112 L150 128"
+        fill="none" stroke="#00FF88" stroke-width="3"
+        stroke-linecap="round" stroke-linejoin="round" />
+  <circle cx="192" cy="112" r="4" fill="#00FF88" />
+  <circle cx="166" cy="112" r="3" fill="#00FF88" />
+
+  <!-- Branche basse -->
+  <path d="M128 196 L128 172 L140 160"
+        fill="none" stroke="#00FF88" stroke-width="3"
+        stroke-linecap="round" stroke-linejoin="round" />
+  <circle cx="128" cy="196" r="4" fill="#00FF88" />
+  <circle cx="128" cy="172" r="3" fill="#00FF88" />
+
+  <!-- Monogramme LM (style antique simplifié) -->
+  <!-- L -->
+  <path d="M104 88
+           L104 168
+           L124 168"
+        fill="none" stroke="#E6FFF7" stroke-width="7"
+        stroke-linecap="round" stroke-linejoin="round" />
+
+  <!-- M -->
+  <path d="M132 168
+           L132 96
+           L144 120
+           L156 96
+           L156 168"
+        fill="none" stroke="#E6FFF7" stroke-width="7"
+        stroke-linecap="round" stroke-linejoin="round" />
+
+</svg>

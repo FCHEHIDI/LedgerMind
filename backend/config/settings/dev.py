@@ -14,15 +14,18 @@ from .base import *  # noqa: F401, F403
 
 DEBUG = True
 
-ALLOWED_HOSTS = ["localhost", "127.0.0.1", "django"]
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", "django", "api.localhost", "app.localhost"]
 
 # ---------------------------------------------------------------------------
 # CORS — dev: accept all localhost origins
 # ---------------------------------------------------------------------------
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
+    "http://localhost:3001",
+    "http://localhost:3002",
     "http://localhost:5173",
     "http://127.0.0.1:3000",
+    "http://app.localhost:8888",
 ]
 CORS_ALLOW_CREDENTIALS = True
 

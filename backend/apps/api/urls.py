@@ -10,6 +10,7 @@ Pattern:
   /api/v1/journal/               GET/POST
   /api/v1/journal/<uuid>/        GET
   /api/v1/organizations/         GET (liste des orgs de l'utilisateur)
+  /api/v1/dashboard/metrics/     GET (métriques tableau de bord)
 """
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
@@ -19,7 +20,7 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 
-from .views import InvoiceViewSet, JournalEntryViewSet, OrganizationViewSet
+from .views import DashboardMetricsView, DocumentUploadView, InvoiceViewSet, JournalEntryViewSet, OrganizationViewSet
 
 router = DefaultRouter()
 router.register(r"invoices", InvoiceViewSet, basename="invoice")
@@ -43,5 +44,7 @@ urlpatterns = [
         TokenBlacklistView.as_view(),
         name="token_blacklist",
     ),
+    path("dashboard/metrics/", DashboardMetricsView.as_view(), name="dashboard-metrics"),
+    path("documents/upload/", DocumentUploadView.as_view(), name="document-upload"),
     path("", include(router.urls)),
 ]

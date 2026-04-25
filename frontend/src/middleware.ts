@@ -9,7 +9,8 @@ export function middleware(req: NextRequest) {
   const isPublic =
     PUBLIC_PATHS.some((p) => pathname.startsWith(p)) ||
     pathname.startsWith("/_next/") ||
-    pathname.startsWith("/favicon");
+    pathname.startsWith("/favicon") ||
+    /\.(png|jpg|jpeg|gif|svg|ico|webp|woff2?|ttf|otf)$/.test(pathname);
 
   if (isPublic) return NextResponse.next();
 

@@ -27,9 +27,11 @@ différents :
 
 ### API REST — SimpleJWT
 
-- **Access token** : JWT, durée de vie **15 minutes**
+- **Access token** : JWT, durée de vie **5 minutes** (intentionnellement courte —
+  données financières sensibles ; le frontend doit implémenter un intercepteur de
+  rafraîchissement transparent avant expiration)
 - **Refresh token** : JWT opaque stocké en cookie `HttpOnly; Secure; SameSite=Strict`,
-  durée de vie **7 jours**
+  durée de vie **24 heures** (réduit à 7 jours en prod selon politique de sécurité org)
 - **Rotation des refresh tokens** : activée (`ROTATE_REFRESH_TOKENS = True`) —
   chaque refresh invalide le précédent
 - **Blacklist** : `rest_framework_simplejwt.token_blacklist` activée — logout serveur

@@ -30,3 +30,8 @@ python-json-logger==2.0.7
 
 # Storage S3/MinIO
 django-storages==1.14.4
+
+# AI Agents — ADR-007
+langgraph==0.2.74
+langchain-ollama==0.2.3
+pdfplumber==0.11.4

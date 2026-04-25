@@ -58,6 +58,7 @@ LOCAL_APPS = [
     "apps.tenants",
     "apps.documents",
     "apps.ledger",
+    "apps.agents",
     "apps.api",
 ]
 

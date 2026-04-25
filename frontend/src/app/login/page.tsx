@@ -19,10 +19,11 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const res = await fetch(`${DJANGO_PROXY}/auth/token/`, {
+      const res = await fetch(`${DJANGO_PROXY}/v1/auth/token/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        // SimpleJWT attend "username" + "password" (modèle User Django standard)
+        body: JSON.stringify({ username: email, password }),
       });
 
       if (!res.ok) {
