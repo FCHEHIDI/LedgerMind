@@ -81,3 +81,58 @@ class TenantMembership(models.Model):
 
     def __str__(self) -> str:
         return f"{self.user.username} @ {self.organization.name} ({self.role})"
+
+
+class OrgCreationRequest(models.Model):
+    """Demande de création d'organisation soumise par un utilisateur invité.
+
+    Workflow:
+      pending  → approved (superuser) → Organization + TenantMembership créés
+      pending  → rejected (superuser)
+
+    Le champ `reviewer` est NULL jusqu'à la décision.
+    Les notifications sont déléguées à NotificationService (apps/api/notifications.py).
+    """
+
+    STATUS_PENDING = "pending"
+    STATUS_APPROVED = "approved"
+    STATUS_REJECTED = "rejected"
+
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "En attente"),
+        (STATUS_APPROVED, "Approuvée"),
+        (STATUS_REJECTED, "Refusée"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    requester = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="org_requests",
+    )
+    name = models.CharField(max_length=255)
+    siren = models.CharField(max_length=9)
+    message = models.TextField(blank=True, default="")
+    status = models.CharField(
+        max_length=10,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+        db_index=True,
+    )
+    reviewer = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="reviewed_org_requests",
+    )
+    reviewer_note = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "tenants_org_creation_request"
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"OrgRequest({self.name}, {self.siren}) by {self.requester.username} [{self.status}]"

@@ -30,12 +30,19 @@ from rest_framework.views import APIView
 
 from apps.documents.models import Invoice
 from apps.ledger.models import ChartOfAccounts, JournalEntry
-from apps.tenants.models import Organization, TenantMembership
+from apps.tenants.models import Organization, OrgCreationRequest, TenantMembership
 
+from .notifications import (
+    notify_org_request_approved,
+    notify_org_request_rejected,
+    notify_org_request_submitted,
+)
 from .serializers import (
     ChartOfAccountsSerializer,
     InvoiceSerializer,
     JournalEntrySerializer,
+    OrgCreationRequestReviewSerializer,
+    OrgCreationRequestSerializer,
     OrganizationSerializer,
 )
 
@@ -1437,6 +1444,140 @@ class OrganizationViewSet(
         return Organization.objects.filter(
             id__in=org_ids, is_active=True
         ).annotate(role=Subquery(role_subquery))
+
+
+class OrgCreationRequestViewSet(
+    mixins.CreateModelMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    """Demandes de création d'organisation.
+
+    Endpoints:
+      POST   /api/v1/org-requests/              — soumettre une demande (user invité)
+      GET    /api/v1/org-requests/              — liste (own requests ou all si superuser)
+      GET    /api/v1/org-requests/<uuid>/       — détail
+      POST   /api/v1/org-requests/<uuid>/approve/ — approuver (superuser uniquement)
+      POST   /api/v1/org-requests/<uuid>/reject/  — refuser  (superuser uniquement)
+
+    Sécurité:
+      - Un user normal ne voit que ses propres demandes.
+      - Les actions approve/reject sont réservées aux superusers (is_superuser).
+      - La création d'org + membership est atomique (transaction.atomic).
+    """
+
+    serializer_class = OrgCreationRequestSerializer
+    permission_classes = [IsAuthenticated]
+    http_method_names = ["get", "post", "head", "options"]
+
+    def get_queryset(self):
+        """Retourne les demandes visibles pour l'utilisateur courant.
+
+        Returns:
+            QuerySet filtré : toutes les demandes si superuser, sinon les siennes.
+        """
+        user = self.request.user
+        if user.is_superuser:
+            return OrgCreationRequest.objects.select_related("requester", "reviewer").all()
+        return OrgCreationRequest.objects.filter(requester=user).select_related("reviewer")
+
+    def perform_create(self, serializer):
+        """Sauvegarde la demande et déclenche la notification.
+
+        Args:
+            serializer: Serializer validé avec les données de la demande.
+        """
+        instance = serializer.save(requester=self.request.user)
+        notify_org_request_submitted(instance)
+
+    @action(detail=True, methods=["post"], url_path="approve")
+    def approve(self, request, pk=None):
+        """Approuve la demande : crée l'org + membership org_owner.
+
+        Réservé aux superusers. La création est atomique.
+
+        Args:
+            request: Requête HTTP avec payload optionnel {reviewer_note}.
+            pk: UUID de la demande.
+
+        Returns:
+            Response 200 avec la demande mise à jour, ou 400/403 en erreur.
+        """
+        if not request.user.is_superuser:
+            return Response({"detail": "Permission refusée."}, status=403)
+
+        org_request = self.get_object()
+        if org_request.status != OrgCreationRequest.STATUS_PENDING:
+            return Response(
+                {"detail": f"La demande est déjà {org_request.status}."},
+                status=400,
+            )
+
+        review_serializer = OrgCreationRequestReviewSerializer(data=request.data)
+        review_serializer.is_valid(raise_exception=True)
+
+        try:
+            with transaction.atomic():
+                # Créer l'organisation
+                org = Organization.objects.create(
+                    name=org_request.name,
+                    siren=org_request.siren,
+                )
+                # Créer le membership org_owner pour le requester
+                TenantMembership.objects.create(
+                    user=org_request.requester,
+                    organization=org,
+                    role="org_owner",
+                    is_active=True,
+                )
+                # Mettre à jour la demande
+                org_request.status = OrgCreationRequest.STATUS_APPROVED
+                org_request.reviewer = request.user
+                org_request.reviewer_note = review_serializer.validated_data.get("reviewer_note", "")
+                org_request.reviewed_at = timezone.now()
+                org_request.save()
+        except Exception as exc:
+            logger.error("org_request.approve failed id=%s error=%s", pk, exc)
+            return Response({"detail": "Erreur lors de la création de l'organisation."}, status=500)
+
+        notify_org_request_approved(org_request)
+        return Response(OrgCreationRequestSerializer(org_request).data)
+
+    @action(detail=True, methods=["post"], url_path="reject")
+    def reject(self, request, pk=None):
+        """Refuse la demande de création d'org.
+
+        Réservé aux superusers.
+
+        Args:
+            request: Requête HTTP avec payload optionnel {reviewer_note}.
+            pk: UUID de la demande.
+
+        Returns:
+            Response 200 avec la demande mise à jour, ou 400/403 en erreur.
+        """
+        if not request.user.is_superuser:
+            return Response({"detail": "Permission refusée."}, status=403)
+
+        org_request = self.get_object()
+        if org_request.status != OrgCreationRequest.STATUS_PENDING:
+            return Response(
+                {"detail": f"La demande est déjà {org_request.status}."},
+                status=400,
+            )
+
+        review_serializer = OrgCreationRequestReviewSerializer(data=request.data)
+        review_serializer.is_valid(raise_exception=True)
+
+        org_request.status = OrgCreationRequest.STATUS_REJECTED
+        org_request.reviewer = request.user
+        org_request.reviewer_note = review_serializer.validated_data.get("reviewer_note", "")
+        org_request.reviewed_at = timezone.now()
+        org_request.save()
+
+        notify_org_request_rejected(org_request)
+        return Response(OrgCreationRequestSerializer(org_request).data)
 
 
 class DocumentUploadView(APIView):

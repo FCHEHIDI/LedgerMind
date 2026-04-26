@@ -19,9 +19,73 @@ from rest_framework import serializers
 
 from apps.documents.models import Invoice, ProcessingJob
 from apps.ledger.models import AccountEntry, BankStatement, BankStatementLine, ChartOfAccounts, JournalEntry, JournalEntryAudit, Lettering, LetteringLine
-from apps.tenants.models import Organization
+from apps.tenants.models import Organization, OrgCreationRequest
 
 logger = logging.getLogger("apps.api.serializers")
+
+
+class OrgCreationRequestSerializer(serializers.ModelSerializer):
+    """Serializer pour OrgCreationRequest — soumission et lecture.
+
+    En création (POST) seuls name, siren, message sont écribles.
+    Les champs de décision (status, reviewer, reviewer_note, reviewed_at)
+    sont en lecture seule pour le requester.
+    """
+
+    requester_username = serializers.CharField(source="requester.username", read_only=True)
+    reviewer_username = serializers.CharField(
+        source="reviewer.username", read_only=True, default=None, allow_null=True
+    )
+
+    class Meta:
+        model = OrgCreationRequest
+        fields = [
+            "id",
+            "name",
+            "siren",
+            "message",
+            "status",
+            "requester_username",
+            "reviewer_username",
+            "reviewer_note",
+            "created_at",
+            "reviewed_at",
+        ]
+        read_only_fields = [
+            "id",
+            "status",
+            "requester_username",
+            "reviewer_username",
+            "reviewer_note",
+            "created_at",
+            "reviewed_at",
+        ]
+
+    def validate_siren(self, value: str) -> str:
+        """Valide le format SIREN (9 chiffres).
+
+        Args:
+            value: Valeur soumise.
+
+        Returns:
+            SIREN nettoyé.
+
+        Raises:
+            ValidationError: Si le format est invalide.
+        """
+        cleaned = value.strip().replace(" ", "")
+        if not cleaned.isdigit() or len(cleaned) != 9:
+            raise serializers.ValidationError("Le SIREN doit contenir exactement 9 chiffres.")
+        return cleaned
+
+
+class OrgCreationRequestReviewSerializer(serializers.Serializer):
+    """Serializer pour l'action approve/reject — payload de décision.
+
+    Utilisé uniquement par le superuser dans les actions @action.
+    """
+
+    reviewer_note = serializers.CharField(required=False, allow_blank=True, default="")
 
 
 class OrganizationSerializer(serializers.ModelSerializer):

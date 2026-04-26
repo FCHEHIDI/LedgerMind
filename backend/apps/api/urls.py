@@ -24,13 +24,14 @@ from .views import (
     BatchDocumentUploadView, BankReconciliationViewSet, BilanView,
     ChartOfAccountsViewSet, CompteDeResultatView, DashboardMetricsView,
     DocumentUploadView, InvoiceViewSet, JournalEntryViewSet,
-    LetterageViewSet, OrganizationViewSet, TvaCA3View,
+    LetterageViewSet, OrgCreationRequestViewSet, OrganizationViewSet, TvaCA3View,
 )
 
 router = DefaultRouter()
 router.register(r"invoices", InvoiceViewSet, basename="invoice")
 router.register(r"journal", JournalEntryViewSet, basename="journal")
 router.register(r"organizations", OrganizationViewSet, basename="organization")
+router.register(r"org-requests", OrgCreationRequestViewSet, basename="org-request")
 router.register(r"lettrage", LetterageViewSet, basename="lettrage")
 router.register(r"bank-statements", BankReconciliationViewSet, basename="bank-statement")
 router.register(r"chart", ChartOfAccountsViewSet, basename="chart")
