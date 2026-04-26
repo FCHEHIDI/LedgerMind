@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 const NAV_ITEMS = [
   { label: "Tableau de bord", href: "/app/dashboard", icon: "⊞" },
   { label: "Écritures", href: "/app/ledger", icon: "≡" },
+  { label: "Plan de comptes", href: "/app/ledger/plan-comptes", icon: "≔" },
   { label: "Exports comptables", href: "/app/ledger/exports", icon: "↓" },
   { label: "Rapports", href: "/app/reports", icon: "◫" },
   { label: "Rapprochement", href: "/app/bank", icon: "⇌" },
@@ -38,7 +39,7 @@ export default function AppSidebar() {
         {NAV_ITEMS.map(({ label, href, icon }) => {
           const active =
             href === "/app/ledger"
-              ? pathname === "/app/ledger" || (pathname.startsWith("/app/ledger/") && !pathname.startsWith("/app/ledger/lettrage") && !pathname.startsWith("/app/ledger/exports"))
+              ? pathname === "/app/ledger" || (pathname.startsWith("/app/ledger/") && !pathname.startsWith("/app/ledger/lettrage") && !pathname.startsWith("/app/ledger/exports") && !pathname.startsWith("/app/ledger/plan-comptes"))
               : pathname.startsWith(href);
           return (
             <Link
