@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
+import { buildProxyHeaders } from "@/lib/proxy";
 
 const API_BASE =
   process.env.DJANGO_INTERNAL_URL ??
@@ -12,19 +13,13 @@ const API_BASE =
  */
 export async function GET(req: NextRequest) {
   const cookieStore = await cookies();
-  const token = cookieStore.get("access_token")?.value;
-
-  if (!token) {
-    return NextResponse.json({ detail: "Non authentifié." }, { status: 401 });
-  }
+  const headers = buildProxyHeaders(cookieStore);
+  if (!headers) return NextResponse.json({ detail: "Non authentifié." }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
   const upstream = await fetch(
     `${API_BASE}/api/v1/invoices/?${searchParams.toString()}`,
-    {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store",
-    }
+    { headers, cache: "no-store" }
   );
 
   const data = await upstream.json();
@@ -37,11 +32,8 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   const cookieStore = await cookies();
-  const token = cookieStore.get("access_token")?.value;
-
-  if (!token) {
-    return NextResponse.json({ detail: "Non authentifié." }, { status: 401 });
-  }
+  const headers = buildProxyHeaders(cookieStore);
+  if (!headers) return NextResponse.json({ detail: "Non authentifié." }, { status: 401 });
 
   let body: unknown;
   try {
@@ -52,10 +44,7 @@ export async function POST(req: NextRequest) {
 
   const upstream = await fetch(`${API_BASE}/api/v1/invoices/`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
+    headers,
     body: JSON.stringify(body),
   });
 

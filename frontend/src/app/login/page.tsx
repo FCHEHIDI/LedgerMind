@@ -42,7 +42,7 @@ export default function LoginPage() {
         body: JSON.stringify({ access, refresh }),
       });
 
-      router.push("/app/dashboard");
+      router.push("/app");
     } catch {
       setError("Impossible de joindre le serveur. Vérifiez votre connexion.");
     } finally {
