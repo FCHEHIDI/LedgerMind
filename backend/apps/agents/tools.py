@@ -220,12 +220,20 @@ def create_journal_entry(
 
     org = Organization.objects.get(id=org_id)
 
+    from apps.documents.models import Invoice as InvoiceModel
+    invoice_instance = None
+    try:
+        invoice_instance = InvoiceModel.objects.get(id=invoice_id)
+    except InvoiceModel.DoesNotExist:
+        pass
+
     entry = JournalEntry.objects.create(
         org=org,
         reference=reference,
         journal_code="ACH",
         entry_date=entry_date,
         status="draft",
+        invoice=invoice_instance,
     )
 
     account_entries = [
@@ -241,12 +249,7 @@ def create_journal_entry(
     ]
     AccountEntry.objects.bulk_create(account_entries)
 
-    # Lier la facture à l'écriture si le champ existe
-    try:
-        from apps.documents.models import Invoice
-        Invoice.objects.filter(id=invoice_id).update(status="validated")
-    except Exception:
-        pass
+    # Ne pas auto-valider la facture : l'utilisateur valide manuellement via le drawer
 
     logger.info(
         "agent.tools.create_journal_entry entry_id=%s org_id=%s lines=%d",

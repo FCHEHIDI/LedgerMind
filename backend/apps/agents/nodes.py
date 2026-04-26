@@ -209,7 +209,11 @@ def _extract_text_from_pdf(pdf_bytes: bytes, invoice_id: str) -> str:
 
 
 def _llm_extract_invoice(raw_text: str, invoice_id: str) -> dict[str, Any] | None:
-    """Appelle qwen2.5:7b pour extraire les données structurées d'une facture.
+    """Appelle le LLM configuré pour extraire les données structurées d'une facture.
+
+    Provider sélectionné via LLM_PROVIDER (ollama|groq, défaut: ollama).
+    Modèle sélectionné via DOC_INTAKE_MODEL (défaut: qwen2.5:7b pour ollama,
+    llama-3.1-8b-instant pour groq).
 
     Args:
         raw_text: Texte brut de la facture (jamais loggé — ADR-005).
@@ -219,18 +223,30 @@ def _llm_extract_invoice(raw_text: str, invoice_id: str) -> dict[str, Any] | Non
         Dict avec les clés extraites, ou None si l'extraction échoue.
     """
     import os
-    from langchain_ollama import ChatOllama
     from langchain_core.messages import HumanMessage, SystemMessage
 
-    ollama_base_url = os.environ.get("OLLAMA_BASE_URL", "http://ollama:11434")
+    provider = os.environ.get("LLM_PROVIDER", "ollama").lower()
 
     try:
-        llm = ChatOllama(
-            model="qwen2.5:7b",
-            base_url=ollama_base_url,
-            temperature=0.0,
-            format="json",
-        )
+        if provider == "groq":
+            from langchain_groq import ChatGroq
+            model_name = os.environ.get("DOC_INTAKE_MODEL", "llama-3.1-8b-instant")
+            llm = ChatGroq(
+                model=model_name,
+                temperature=0.0,
+                api_key=os.environ.get("GROQ_API_KEY", ""),
+            )
+        else:
+            from langchain_ollama import ChatOllama
+            model_name = os.environ.get("DOC_INTAKE_MODEL", "qwen2.5:7b")
+            ollama_base_url = os.environ.get("OLLAMA_BASE_URL", "http://ollama:11434")
+            llm = ChatOllama(
+                model=model_name,
+                base_url=ollama_base_url,
+                temperature=0.0,
+                format="json",
+            )
+        logger.debug("agent.doc_intake.provider=%s model=%s invoice_id=%s", provider, model_name, invoice_id)
         messages = [
             SystemMessage(content=DOC_INTAKE_SYSTEM_PROMPT),
             HumanMessage(content=DOC_INTAKE_USER_PROMPT.format(text=raw_text[:4000])),
@@ -353,7 +369,11 @@ def _llm_generate_accounting(
     account_plan: dict[str, str],
     invoice_id: str,
 ) -> dict[str, Any] | None:
-    """Appelle mistral:7b pour générer l'écriture PCG.
+    """Appelle le LLM configuré pour générer l'écriture PCG.
+
+    Provider sélectionné via LLM_PROVIDER (ollama|groq, défaut: ollama).
+    Modèle sélectionné via ACCOUNTING_MODEL (défaut: mistral:7b pour ollama,
+    mixtral-8x7b-32768 pour groq).
 
     Args:
         extracted: Données extraites par Agent 1.
@@ -364,19 +384,31 @@ def _llm_generate_accounting(
         Dict avec "lines" (liste d'AccountEntry), ou None si erreur.
     """
     import os
-    from langchain_ollama import ChatOllama
     from langchain_core.messages import HumanMessage, SystemMessage
 
-    ollama_base_url = os.environ.get("OLLAMA_BASE_URL", "http://ollama:11434")
+    provider = os.environ.get("LLM_PROVIDER", "ollama").lower()
     account_plan_str = "\n".join(f"  {k}: {v}" for k, v in account_plan.items())
 
     try:
-        llm = ChatOllama(
-            model="mistral:7b",
-            base_url=ollama_base_url,
-            temperature=0.0,
-            format="json",
-        )
+        if provider == "groq":
+            from langchain_groq import ChatGroq
+            model_name = os.environ.get("ACCOUNTING_MODEL", "mixtral-8x7b-32768")
+            llm = ChatGroq(
+                model=model_name,
+                temperature=0.0,
+                api_key=os.environ.get("GROQ_API_KEY", ""),
+            )
+        else:
+            from langchain_ollama import ChatOllama
+            model_name = os.environ.get("ACCOUNTING_MODEL", "mistral:7b")
+            ollama_base_url = os.environ.get("OLLAMA_BASE_URL", "http://ollama:11434")
+            llm = ChatOllama(
+                model=model_name,
+                base_url=ollama_base_url,
+                temperature=0.0,
+                format="json",
+            )
+        logger.debug("agent.accounting.provider=%s model=%s invoice_id=%s", provider, model_name, invoice_id)
         messages = [
             SystemMessage(content=ACCOUNTING_SYSTEM_PROMPT),
             HumanMessage(content=ACCOUNTING_USER_PROMPT.format(

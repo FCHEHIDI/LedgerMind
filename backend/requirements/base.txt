@@ -34,4 +34,5 @@ django-storages==1.14.4
 # AI Agents — ADR-007
 langgraph==0.2.74
 langchain-ollama==0.2.3
+langchain-groq==0.3.2
 pdfplumber==0.11.4

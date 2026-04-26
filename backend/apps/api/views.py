@@ -161,13 +161,24 @@ class JournalEntryViewSet(
     def get_queryset(self):
         """Filtre les écritures par org_id courant.
 
+        Paramètres optionnels :
+          ?invoice=<uuid>  — filtre par facture source (workflow IA)
+          ?status=<str>    — filtre par statut (draft, posted, cancelled)
+
         Returns:
             QuerySet filtré — uniquement les écritures du tenant courant.
         """
         org_id = _get_current_org_id(self.request)
         if org_id is None:
             return JournalEntry.objects.none()
-        return JournalEntry.objects.for_org(org_id).order_by("-entry_date")
+        qs = JournalEntry.objects.for_org(org_id).order_by("-entry_date")
+        invoice_id = self.request.query_params.get("invoice")
+        if invoice_id:
+            qs = qs.filter(invoice_id=invoice_id)
+        status_filter = self.request.query_params.get("status")
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+        return qs
 
     def perform_create(self, serializer):
         """Injecte org_id automatiquement à la création.
@@ -231,6 +242,12 @@ class JournalEntryViewSet(
 
         entry.status = "posted"
         entry.save(update_fields=["status", "updated_at"])
+
+        # Propager la validation vers la facture liée
+        if entry.invoice_id:
+            from apps.documents.models import Invoice
+            Invoice.objects.filter(id=entry.invoice_id).update(status="validated")
+
         logger.info("journal.validated entry_id=%s org_id=%s", entry.id, entry.org_id)
 
         from apps.ledger.models import JournalEntryAudit
@@ -270,6 +287,12 @@ class JournalEntryViewSet(
 
         entry.status = "cancelled"
         entry.save(update_fields=["status", "updated_at"])
+
+        # Propager le rejet vers la facture liée
+        if entry.invoice_id:
+            from apps.documents.models import Invoice
+            Invoice.objects.filter(id=entry.invoice_id).update(status="rejected")
+
         logger.info("journal.cancelled entry_id=%s org_id=%s", entry.id, entry.org_id)
 
         from apps.ledger.models import JournalEntryAudit
