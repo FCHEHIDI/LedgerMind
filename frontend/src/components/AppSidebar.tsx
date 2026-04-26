@@ -21,16 +21,16 @@ const ROLE_SHORT: Record<string, string> = {
 };
 
 const NAV_ITEMS = [
-  { label: "Tableau de bord", href: "/app/dashboard", icon: "⊞" },
-  { label: "Factures", href: "/app/invoices", icon: "🧾" },
-  { label: "Écritures", href: "/app/ledger", icon: "≡" },
-  { label: "Plan de comptes", href: "/app/ledger/plan-comptes", icon: "≔" },
-  { label: "Exports comptables", href: "/app/ledger/exports", icon: "↓" },
-  { label: "Rapports", href: "/app/reports", icon: "◫" },
-  { label: "Rapprochement", href: "/app/bank", icon: "⇌" },
-  { label: "Lettrage", href: "/app/ledger/lettrage", icon: "⊕" },
-  { label: "Documents", href: "/app/documents", icon: "⊡" },
-  { label: "Conformité", href: "/app/compliance", icon: "✓" },
+  { label: "Tableau de bord",   href: "/app/dashboard",            icon: "⊞" },
+  { label: "Documents",         href: "/app/documents",            icon: "⊡" },
+  { label: "Factures",          href: "/app/invoices",             icon: "🧾" },
+  { label: "Écritures",         href: "/app/ledger",               icon: "≡" },
+  { label: "Plan de comptes",   href: "/app/ledger/plan-comptes",  icon: "≔" },
+  { label: "Lettrage",          href: "/app/ledger/lettrage",      icon: "⊕" },
+  { label: "Rapprochement",     href: "/app/bank",                 icon: "⇌" },
+  { label: "Rapports",          href: "/app/reports",              icon: "◫" },
+  { label: "Exports comptables",href: "/app/ledger/exports",       icon: "↓" },
+  { label: "Conformité",        href: "/app/compliance",           icon: "✓" },
 ];
 
 export default function AppSidebar() {

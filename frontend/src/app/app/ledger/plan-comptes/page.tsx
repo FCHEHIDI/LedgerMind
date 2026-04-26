@@ -156,7 +156,7 @@ function AddAccountModal({ onClose, onCreated }: AddAccountModalProps) {
 
 export default function PlanComptesPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [seeding, setSeeding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -165,25 +165,55 @@ export default function PlanComptesPage() {
   const [showModal, setShowModal] = useState(false);
   const [expandedClasses, setExpandedClasses] = useState<Set<number>>(new Set([1, 2, 3, 4, 5, 6, 7]));
 
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [hasNext, setHasNext] = useState(false);
+  const [hasPrev, setHasPrev] = useState(false);
+
+  // Results only shown when user has typed a search term or explicitly selected a class
+  // filterClass="" = initial state (nothing chosen yet)
+  // filterClass="all" = user picked "Toutes" (active filter, no class constraint)
+  // filterClass="1".."9" = specific class
+  const hasActiveFilter = search.trim() !== "" || filterClass !== "";
+
   const load = useCallback(async () => {
+    if (!hasActiveFilter) {
+      setAccounts([]);
+      setTotalCount(0);
+      setHasNext(false);
+      setHasPrev(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams();
-      if (filterClass) params.set("class", filterClass);
+      // "all" means no class constraint; a digit string means a specific class
+      if (filterClass && filterClass !== "all") params.set("class", filterClass);
       if (filterActive) params.set("active", filterActive);
-      if (search) params.set("search", search);
+      if (search.trim()) params.set("search", search.trim());
+      params.set("page", String(page));
       const res = await fetch(`/api/chart?${params}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail ?? `Erreur ${res.status}`);
-      // API may return paginated or plain array
-      setAccounts(Array.isArray(data) ? data : (data.results ?? []));
+      if (Array.isArray(data)) {
+        setAccounts(data);
+        setTotalCount(data.length);
+        setHasNext(false);
+        setHasPrev(false);
+      } else {
+        setAccounts(data.results ?? []);
+        setTotalCount(data.count ?? 0);
+        setHasNext(!!data.next);
+        setHasPrev(!!data.previous);
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Erreur inconnue");
     } finally {
       setLoading(false);
     }
-  }, [filterClass, filterActive, search]);
+  }, [filterClass, filterActive, search, page, hasActiveFilter]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -224,29 +254,22 @@ export default function PlanComptesPage() {
         <div>
           <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">Plan de comptes</h1>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            {loading ? "Chargement…" : `${accounts.length} compte${accounts.length !== 1 ? "s" : ""}${filterActive === "true" ? " actifs" : ""}`}
+            {loading
+              ? "Chargement…"
+              : hasActiveFilter
+                ? `${totalCount} compte${totalCount !== 1 ? "s" : ""}${filterActive === "true" ? " actifs" : ""}`
+                : "Recherchez ou filtrez pour afficher les comptes"}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          {accounts.length === 0 && !loading && (
-            <button
-              onClick={handleSeedPcg}
-              disabled={seeding}
-              className="rounded-lg border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50 transition-colors"
-            >
-              {seeding ? "Import PCG…" : "⊕ Importer PCG standard"}
-            </button>
-          )}
-          {accounts.length > 0 && (
-            <button
-              onClick={handleSeedPcg}
-              disabled={seeding}
-              title="Ajouter les comptes PCG manquants"
-              className="rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-2 text-xs text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50 transition-colors"
-            >
-              {seeding ? "Sync…" : "Sync PCG"}
-            </button>
-          )}
+          <button
+            onClick={handleSeedPcg}
+            disabled={seeding}
+            title="Importer / synchroniser le plan PCG standard"
+            className="rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-2 text-xs text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50 transition-colors"
+          >
+            {seeding ? "Sync…" : "Sync PCG"}
+          </button>
           <button
             onClick={() => setShowModal(true)}
             className="rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-4 py-2 text-sm font-medium hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors"
@@ -257,7 +280,7 @@ export default function PlanComptesPage() {
       </div>
 
       {/* Stats bar */}
-      {!loading && accounts.length > 0 && (
+      {!loading && hasActiveFilter && accounts.length > 0 && (
         <div className="flex flex-wrap gap-3">
           {[...grouped.entries()].map(([cls, accs]) => (
             <div key={cls} className={`flex items-center gap-1.5 rounded-lg border-l-2 ${CLASS_COLORS[cls] ?? "border-l-zinc-300"} border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-1.5`}>
@@ -266,7 +289,7 @@ export default function PlanComptesPage() {
             </div>
           ))}
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50 px-3 py-1.5">
-            <span className="text-xs text-zinc-500">{totalActive} actifs / {accounts.length} total</span>
+            <span className="text-xs text-zinc-500">{totalActive} actifs sur cette page · {totalCount} au total</span>
           </div>
         </div>
       )}
@@ -279,7 +302,7 @@ export default function PlanComptesPage() {
             <input
               type="text"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               placeholder="Code ou libellé…"
               className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-400"
             />
@@ -288,10 +311,11 @@ export default function PlanComptesPage() {
             <label className="block text-xs font-medium text-zinc-500 mb-1">Classe</label>
             <select
               value={filterClass}
-              onChange={(e) => setFilterClass(e.target.value)}
+              onChange={(e) => { setFilterClass(e.target.value); setPage(1); }}
               className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-400"
             >
-              <option value="">Toutes</option>
+              <option value="">— Classe</option>
+              <option value="all">Toutes les classes</option>
               {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((c) => (
                 <option key={c} value={String(c)}>Classe {c}</option>
               ))}
@@ -301,7 +325,7 @@ export default function PlanComptesPage() {
             <label className="block text-xs font-medium text-zinc-500 mb-1">Statut</label>
             <select
               value={filterActive}
-              onChange={(e) => setFilterActive(e.target.value)}
+              onChange={(e) => { setFilterActive(e.target.value); setPage(1); }}
               className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-400"
             >
               <option value="true">Actifs</option>
@@ -326,20 +350,18 @@ export default function PlanComptesPage() {
         </div>
       )}
 
-      {/* Empty state */}
-      {!loading && accounts.length === 0 && !error && (
+      {/* Placeholder — no active filter */}
+      {!loading && !hasActiveFilter && (
         <div className="rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-6 py-14 text-center">
-          <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Aucun compte dans le plan de comptes.</p>
-          <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
-            Importez le plan PCG standard pour démarrer.
-          </p>
-          <button
-            onClick={handleSeedPcg}
-            disabled={seeding}
-            className="mt-4 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-4 py-2 text-sm font-medium hover:bg-zinc-700 disabled:opacity-50 transition-colors"
-          >
-            {seeding ? "Import en cours…" : "Importer le PCG standard"}
-          </button>
+          <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Saisissez un code ou un libellé dans la recherche,</p>
+          <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">ou sélectionnez une classe pour afficher les comptes.</p>
+        </div>
+      )}
+
+      {/* Empty results — filter active but nothing found */}
+      {!loading && hasActiveFilter && accounts.length === 0 && !error && (
+        <div className="rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-6 py-10 text-center">
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">Aucun compte trouvé pour ces critères.</p>
         </div>
       )}
 
@@ -424,6 +446,34 @@ export default function PlanComptesPage() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Pagination bar */}
+      {!loading && hasActiveFilter && (hasPrev || hasNext) && (
+        <div className="flex items-center justify-between rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4 py-3">
+          <button
+            onClick={() => setPage((p) => p - 1)}
+            disabled={!hasPrev}
+            className="flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-1.5 text-sm text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            ← Précédent
+          </button>
+
+          <span className="text-xs text-zinc-400 dark:text-zinc-500">
+            Page <span className="font-medium text-zinc-700 dark:text-zinc-300">{page}</span>
+            {totalCount > 0 && (
+              <> · <span className="font-medium text-zinc-700 dark:text-zinc-300">{totalCount}</span> résultat{totalCount !== 1 ? "s" : ""}</>
+            )}
+          </span>
+
+          <button
+            onClick={() => setPage((p) => p + 1)}
+            disabled={!hasNext}
+            className="flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-1.5 text-sm text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            Suivant →
+          </button>
         </div>
       )}
     </div>

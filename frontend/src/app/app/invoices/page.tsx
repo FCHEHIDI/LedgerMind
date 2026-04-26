@@ -29,19 +29,19 @@ interface InvoiceListResponse {
 const STATUSES = [
   { value: "", label: "Tous les statuts" },
   { value: "pending", label: "En attente" },
-  { value: "processing", label: "En traitement" },
-  { value: "extracted", label: "Extrait" },
-  { value: "validated", label: "Validé" },
-  { value: "rejected", label: "Rejeté" },
+  { value: "processing", label: "Traitement IA…" },
+  { value: "extracted", label: "À valider" },
+  { value: "validated", label: "Validée" },
+  { value: "rejected", label: "Rejetée" },
   { value: "error", label: "Erreur" },
 ];
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "En attente",
-  processing: "En traitement",
-  extracted: "Extrait",
-  validated: "Validé",
-  rejected: "Rejeté",
+  processing: "Traitement IA…",
+  extracted: "À valider",
+  validated: "Validée",
+  rejected: "Rejetée",
   error: "Erreur",
 };
 
@@ -49,9 +49,9 @@ const STATUS_STYLES: Record<string, string> = {
   pending:
     "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
   processing:
-    "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-400 animate-pulse",
+    "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-400",
   extracted:
-    "bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400",
+    "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400",
   validated:
     "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400",
   rejected:
@@ -63,7 +63,7 @@ const STATUS_STYLES: Record<string, string> = {
 const STATUS_DOT: Record<string, string> = {
   pending: "bg-zinc-400",
   processing: "bg-blue-500",
-  extracted: "bg-indigo-500",
+  extracted: "bg-amber-500",
   validated: "bg-emerald-500",
   rejected: "bg-red-500",
   error: "bg-orange-500",
@@ -258,6 +258,197 @@ function NewInvoiceModal({ onClose, onCreated }: NewInvoiceModalProps) {
   );
 }
 
+// ── Invoice Drawer ──────────────────────────────────────────────────────────
+
+interface AccountEntryLine {
+  id: string;
+  account_code: string;
+  account_label: string;
+  debit: string;
+  credit: string;
+}
+
+interface JournalEntry {
+  id: string;
+  reference: string;
+  journal_code: string;
+  entry_date: string;
+  status: string;
+  lines: AccountEntryLine[];
+}
+
+interface InvoiceDrawerProps {
+  invoice: Invoice | null;
+  onClose: () => void;
+  onActionDone: () => void;
+}
+
+function InvoiceDrawer({ invoice, onClose, onActionDone }: InvoiceDrawerProps) {
+  const [entry, setEntry] = useState<JournalEntry | null>(null);
+  const [loadingEntry, setLoadingEntry] = useState(false);
+  const [actionLoading, setActionLoading] = useState<"validate" | "cancel" | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!invoice) return;
+    setEntry(null);
+    setActionError(null);
+    setLoadingEntry(true);
+    fetch(`/api/journal?invoice=${invoice.id}`)
+      .then((r) => r.json())
+      .then((data) => {
+        const results: JournalEntry[] = Array.isArray(data) ? data : (data.results ?? []);
+        setEntry(results[0] ?? null);
+      })
+      .catch(() => setEntry(null))
+      .finally(() => setLoadingEntry(false));
+  }, [invoice]);
+
+  async function handleAction(action: "validate" | "cancel") {
+    if (!entry) return;
+    setActionLoading(action);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/journal/${entry.id}/${action}`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { detail?: string; error?: string }).detail ?? (data as { detail?: string; error?: string }).error ?? `Erreur ${res.status}`);
+      onActionDone();
+      onClose();
+    } catch (e: unknown) {
+      setActionError(e instanceof Error ? e.message : "Erreur inconnue");
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  if (!invoice) return null;
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm" onClick={onClose} />
+      {/* Panel */}
+      <div className="fixed right-0 top-0 z-50 h-full w-full max-w-xl bg-white dark:bg-zinc-900 shadow-2xl flex flex-col border-l border-zinc-200 dark:border-zinc-800 overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 shrink-0">
+          <div>
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+              Facture — {invoice.reference || <span className="text-zinc-400 font-normal">sans référence</span>}
+            </h2>
+            <p className="text-xs text-zinc-500 mt-0.5">{invoice.vendor_name || "Fournisseur inconnu"}</p>
+          </div>
+          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors text-lg">✕</button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+          {/* Invoice summary */}
+          <section>
+            <h3 className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-3">Données extraites par l’IA</h3>
+            <div className="grid grid-cols-2 gap-3">
+              {([
+                { label: "Fournisseur", value: invoice.vendor_name },
+                { label: "SIREN", value: invoice.vendor_siren },
+                { label: "Date facture", value: fmtDate(invoice.invoice_date) },
+                { label: "Statut", value: STATUS_LABELS[invoice.status] ?? invoice.status },
+                { label: "Montant HT", value: fmt(invoice.ht_amount) },
+                { label: "TVA", value: fmt(invoice.tva_amount) },
+                { label: "TTC", value: fmt(invoice.ttc_amount) },
+              ] as { label: string; value: string }[]).map(({ label, value }) => (
+                <div key={label} className="rounded-lg bg-zinc-50 dark:bg-zinc-800/60 px-3 py-2">
+                  <p className="text-xs text-zinc-400 mb-0.5">{label}</p>
+                  <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200 truncate">{value || "—"}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* Journal entry */}
+          <section>
+            <h3 className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-3">Écriture comptable générée</h3>
+            {loadingEntry ? (
+              <div className="space-y-2">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
+                ))}
+              </div>
+            ) : !entry ? (
+              <div className="rounded-xl border border-dashed border-zinc-200 dark:border-zinc-700 px-4 py-6 text-center text-xs text-zinc-400">
+                {invoice.status === "processing" ? "Traitement en cours…" : "Aucune écriture générée."}
+              </div>
+            ) : (
+              <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800/50 border-b border-zinc-100 dark:border-zinc-800">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-mono text-zinc-500">{entry.reference || entry.id.slice(0, 8)}</span>
+                    <span className="text-xs text-zinc-400">{entry.journal_code} · {fmtDate(entry.entry_date)}</span>
+                  </div>
+                  <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${
+                    entry.status === "draft" ? "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400" :
+                    entry.status === "posted" ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400" :
+                    "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+                  }`}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${
+                      entry.status === "draft" ? "bg-amber-500" :
+                      entry.status === "posted" ? "bg-emerald-500" : "bg-zinc-400"
+                    }`} />
+                    {entry.status === "draft" ? "Brouillon" : entry.status === "posted" ? "Validée" : entry.status}
+                  </span>
+                </div>
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-zinc-400 border-b border-zinc-100 dark:border-zinc-800">
+                      <th className="px-4 py-2 text-left font-medium">Compte</th>
+                      <th className="px-4 py-2 text-left font-medium">Libellé</th>
+                      <th className="px-4 py-2 text-right font-medium">Débit</th>
+                      <th className="px-4 py-2 text-right font-medium">Crédit</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                    {entry.lines.map((line) => (
+                      <tr key={line.id} className="text-zinc-700 dark:text-zinc-300">
+                        <td className="px-4 py-2 font-mono">{line.account_code}</td>
+                        <td className="px-4 py-2 text-zinc-500 dark:text-zinc-400 max-w-[140px] truncate">{line.account_label}</td>
+                        <td className="px-4 py-2 text-right font-mono">{parseFloat(line.debit) > 0 ? fmt(line.debit) : ""}</td>
+                        <td className="px-4 py-2 text-right font-mono">{parseFloat(line.credit) > 0 ? fmt(line.credit) : ""}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          {actionError && (
+            <div className="rounded-xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/20 px-4 py-3 text-sm text-red-600 dark:text-red-400">
+              {actionError}
+            </div>
+          )}
+        </div>
+
+        {/* Footer actions */}
+        {entry?.status === "draft" && (
+          <div className="shrink-0 px-6 py-4 border-t border-zinc-100 dark:border-zinc-800 flex gap-3">
+            <button
+              onClick={() => handleAction("cancel")}
+              disabled={actionLoading !== null}
+              className="flex-1 rounded-lg border border-red-200 dark:border-red-800 px-4 py-2.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 disabled:opacity-40 transition-colors"
+            >
+              {actionLoading === "cancel" ? "Annulation…" : "Rejeter"}
+            </button>
+            <button
+              onClick={() => handleAction("validate")}
+              disabled={actionLoading !== null}
+              className="flex-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 text-sm font-medium disabled:opacity-40 transition-colors"
+            >
+              {actionLoading === "validate" ? "Validation…" : "Valider l’écriture"}
+            </button>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
 // ── Stats bar ─────────────────────────────────────────────────────────────────
 
 interface StatusCount {
@@ -303,8 +494,9 @@ export default function InvoicesPage() {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 20;
 
-  // Modal
+  // Modal / Drawer
   const [showModal, setShowModal] = useState(false);
+  const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -438,7 +630,8 @@ export default function InvoicesPage() {
               {invoices.map((inv) => (
                 <tr
                   key={inv.id}
-                  className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors"
+                  onClick={() => setSelectedInvoice(inv)}
+                  className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors cursor-pointer"
                 >
                   <td className="px-4 py-3 font-mono text-xs text-zinc-700 dark:text-zinc-300">
                     {inv.reference || <span className="text-zinc-400">—</span>}
@@ -508,6 +701,13 @@ export default function InvoicesPage() {
           onCreated={load}
         />
       )}
+
+      {/* Invoice Drawer */}
+      <InvoiceDrawer
+        invoice={selectedInvoice}
+        onClose={() => setSelectedInvoice(null)}
+        onActionDone={load}
+      />
     </div>
   );
 }
