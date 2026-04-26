@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 
 const NAV_ITEMS = [
   { label: "Tableau de bord", href: "/app/dashboard", icon: "⊞" },
+  { label: "Factures", href: "/app/invoices", icon: "🧾" },
   { label: "Écritures", href: "/app/ledger", icon: "≡" },
   { label: "Plan de comptes", href: "/app/ledger/plan-comptes", icon: "≔" },
   { label: "Exports comptables", href: "/app/ledger/exports", icon: "↓" },
