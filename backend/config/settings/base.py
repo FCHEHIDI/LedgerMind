@@ -152,6 +152,14 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
+# Redirect unauthenticated users to the Django admin login (not /accounts/login/)
+LOGIN_URL = "/admin/login/"
+
+# Disable two_factor admin patch — two_factor URLs are not yet registered in urls.py.
+# Without this, two_factor replaces admin.site.login with its own view which tries to
+# reverse 'two_factor:login', producing an infinite redirect loop.
+TWO_FACTOR_PATCH_ADMIN = False
+
 # ---------------------------------------------------------------------------
 # Django REST Framework — ADR-002
 # ---------------------------------------------------------------------------

@@ -1,0 +1,81 @@
+{% extends "admin/login.html" %}
+{% load i18n %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+  .password-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  .password-wrapper input[type="password"],
+  .password-wrapper input[type="text"] {
+    width: 100%;
+    padding-right: 2.8rem !important;
+    box-sizing: border-box;
+  }
+  .toggle-password {
+    position: absolute;
+    right: 0.6rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    color: #6b7280;
+    display: flex;
+    align-items: center;
+    height: 100%;
+  }
+  .toggle-password:hover {
+    color: #111827;
+  }
+  .toggle-password svg {
+    width: 1.2rem;
+    height: 1.2rem;
+    pointer-events: none;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+{{ block.super }}
+{% endblock %}
+
+{% block footer %}
+{{ block.super }}
+<script>
+(function () {
+  "use strict";
+  document.addEventListener("DOMContentLoaded", function () {
+    var field = document.getElementById("id_password");
+    if (!field) return;
+
+    // Wrap field in a relative container
+    var wrapper = document.createElement("div");
+    wrapper.className = "password-wrapper";
+    field.parentNode.insertBefore(wrapper, field);
+    wrapper.appendChild(field);
+
+    // Build toggle button
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "toggle-password";
+    btn.setAttribute("aria-label", "Afficher / masquer le mot de passe");
+    btn.setAttribute("tabindex", "-1");
+
+    var eyeOpen = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+    var eyeClosed = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+
+    btn.innerHTML = eyeOpen;
+    wrapper.appendChild(btn);
+
+    btn.addEventListener("click", function () {
+      var isPassword = field.type === "password";
+      field.type = isPassword ? "text" : "password";
+      btn.innerHTML = isPassword ? eyeClosed : eyeOpen;
+    });
+  });
+})();
+</script>
+{% endblock %}
