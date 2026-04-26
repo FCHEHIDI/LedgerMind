@@ -17,6 +17,7 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.db import models
+from fernet_fields import EncryptedCharField
 
 from apps.documents.models import Invoice
 from apps.tenants.models import Organization
@@ -342,7 +343,7 @@ class BankStatementLine(models.Model):
     )
     transaction_date = models.DateField(db_index=True)
     value_date = models.DateField(null=True, blank=True)
-    label = models.CharField(max_length=255, blank=True)
+    label = EncryptedCharField(max_length=255, blank=True)  # ADR-GDPR: PII (noms dans libellés bancaires)
     amount = models.DecimalField(max_digits=15, decimal_places=2)
     # amount > 0 → crédit banque (encaissement) ; amount < 0 → débit banque (paiement)
     match_status = models.CharField(

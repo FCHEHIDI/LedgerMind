@@ -5,6 +5,8 @@ Pattern:
   /api/v1/auth/token/            POST  — obtenir access + refresh tokens
   /api/v1/auth/token/refresh/    POST  — renouveler access token
   /api/v1/auth/token/blacklist/  POST  — blacklister refresh token (logout)
+  /api/v1/auth/request-erasure/  POST  — demande effacement RGPD Art.17
+  /api/v1/auth/erasure/<id>/process/ POST — admin: traite une demande (superuser)
   /api/v1/invoices/              GET/POST
   /api/v1/invoices/<uuid>/       GET/PATCH
   /api/v1/journal/               GET/POST
@@ -23,7 +25,8 @@ from rest_framework_simplejwt.views import (
 from .views import (
     BatchDocumentUploadView, BankReconciliationViewSet, BilanView,
     ChartOfAccountsViewSet, CompteDeResultatView, DashboardMetricsView,
-    DocumentUploadView, InvoiceViewSet, JournalEntryViewSet,
+    DocumentUploadView, GDPRErasureProcessView, GDPRErasureRequestView,
+    InvoiceViewSet, JournalEntryViewSet,
     LetterageViewSet, OrgCreationRequestViewSet, OrganizationViewSet, TvaCA3View,
 )
 
@@ -59,5 +62,8 @@ urlpatterns = [
     path("tva/ca3/", TvaCA3View.as_view(), name="tva-ca3"),
     path("reports/compte-de-resultat/", CompteDeResultatView.as_view(), name="compte-de-resultat"),
     path("reports/bilan/", BilanView.as_view(), name="bilan"),
+    # RGPD — Droit à l'effacement (Art. 17)
+    path("auth/request-erasure/", GDPRErasureRequestView.as_view(), name="gdpr-erasure-request"),
+    path("auth/erasure/<str:pk>/process/", GDPRErasureProcessView.as_view(), name="gdpr-erasure-process"),
     path("", include(router.urls)),
 ]

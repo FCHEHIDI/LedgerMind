@@ -68,3 +68,4 @@ staticfiles/
 postgres-data/
 redis-data/
 minio-data/
+mcp_servers/target/

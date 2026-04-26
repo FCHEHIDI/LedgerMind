@@ -136,3 +136,62 @@ class OrgCreationRequest(models.Model):
 
     def __str__(self) -> str:
         return f"OrgRequest({self.name}, {self.siren}) by {self.requester.username} [{self.status}]"
+
+
+class GDPRErasureRequest(models.Model):
+    """Demande de suppression RGPD (Article 17 — Droit à l'effacement).
+
+    Lorsqu'un utilisateur demande la suppression de son compte, une instance
+    est créée. Le traitement effectue une pseudonymisation (pas une suppression
+    physique) afin de respecter l'obligation de conservation comptable de
+    10 ans (Code commerce L.123-22 & L.123-23).
+
+    Workflow:
+      pending  → processed (superuser ou tâche Celery)
+
+    Pseudonymisation effectuée par GDPRService.pseudonymize_user() :
+      - User.email     → f"deleted_{uuid}@anonymized.invalid"
+      - User.username  → f"deleted_{uuid}"
+      - User.first_name, User.last_name → ""
+      - User.is_active → False
+      - User.password  → unusable password (set_unusable_password)
+    Les FK vers User dans JournalEntryAudit etc. sont conservées (obligation légale).
+    """
+
+    STATUS_PENDING = "pending"
+    STATUS_PROCESSED = "processed"
+
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "En attente"),
+        (STATUS_PROCESSED, "Traité"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="erasure_requests",
+    )
+    requested_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(
+        max_length=10,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+        db_index=True,
+    )
+    processed_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="processed_erasures",
+    )
+
+    class Meta:
+        db_table = "tenants_gdpr_erasure_request"
+        ordering = ["-requested_at"]
+
+    def __str__(self) -> str:
+        return f"GDPRErasureRequest({self.user_id}) [{self.status}]"

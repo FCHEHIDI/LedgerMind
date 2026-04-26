@@ -19,8 +19,7 @@ from rest_framework import serializers
 
 from apps.documents.models import Invoice, ProcessingJob
 from apps.ledger.models import AccountEntry, BankStatement, BankStatementLine, ChartOfAccounts, JournalEntry, JournalEntryAudit, Lettering, LetteringLine
-from apps.tenants.models import Organization, OrgCreationRequest
-
+from apps.tenants.models import GDPRErasureRequest, Organization, OrgCreationRequest
 logger = logging.getLogger("apps.api.serializers")
 
 
@@ -558,3 +557,25 @@ class ChartOfAccountsSerializer(serializers.ModelSerializer):
                 "Le code compte doit être entièrement numérique."
             )
         return value
+
+
+class GDPRErasureRequestSerializer(serializers.ModelSerializer):
+    """Sérialise une demande d'effacement RGPD (Art. 17).
+
+    En création (POST) aucun champ n'est requis — l'utilisateur est déduit
+    du token JWT de la requête dans la view.
+
+    Les champs processed_at, processed_by, status sont en lecture seule
+    pour l'utilisateur; l'admin peut changer le status via l'endpoint
+    d'administration séparé.
+    """
+
+    class Meta:
+        model = GDPRErasureRequest
+        fields = [
+            "id",
+            "status",
+            "requested_at",
+            "processed_at",
+        ]
+        read_only_fields = ["id", "status", "requested_at", "processed_at"]

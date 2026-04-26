@@ -9,8 +9,11 @@ ADR-001: org_id (ForeignKey Organization) sur tous les modèles.
 ADR-004: EncryptedCharField pour vendor_name, vendor_siren, ht_amount,
          tva_amount, ttc_amount, raw_text.
 """
+import hashlib
+import hmac
 import uuid
 
+from django.conf import settings
 from django.db import models
 from fernet_fields import EncryptedCharField, EncryptedTextField
 
@@ -79,6 +82,22 @@ class Invoice(models.Model):
     def __str__(self) -> str:
         # NEVER include vendor_name or amounts in __str__ — ADR-005
         return f"Invoice {self.id} [{self.status}]"
+
+    def save(self, *args, **kwargs) -> None:
+        """Recompute vendor_siren_hash on every save — ADR-004.
+
+        Uses HMAC-SHA256 with SECRET_KEY to prevent brute-force against
+        the 900M possible SIREN space (a plain SHA-256 would be reversible).
+        """
+        if self.vendor_siren:
+            self.vendor_siren_hash = hmac.new(
+                settings.SECRET_KEY.encode("utf-8"),
+                self.vendor_siren.encode("utf-8"),
+                hashlib.sha256,
+            ).hexdigest()
+        else:
+            self.vendor_siren_hash = ""
+        super().save(*args, **kwargs)
 
 
 class ProcessingJob(models.Model):

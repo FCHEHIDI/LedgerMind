@@ -30,7 +30,7 @@ from rest_framework.views import APIView
 
 from apps.documents.models import Invoice
 from apps.ledger.models import ChartOfAccounts, JournalEntry
-from apps.tenants.models import Organization, OrgCreationRequest, TenantMembership
+from apps.tenants.models import GDPRErasureRequest, Organization, OrgCreationRequest, TenantMembership
 
 from .notifications import (
     notify_org_request_approved,
@@ -39,12 +39,14 @@ from .notifications import (
 )
 from .serializers import (
     ChartOfAccountsSerializer,
+    GDPRErasureRequestSerializer,
     InvoiceSerializer,
     JournalEntrySerializer,
     OrgCreationRequestReviewSerializer,
     OrgCreationRequestSerializer,
     OrganizationSerializer,
 )
+from .gdpr import process_erasure_request
 
 logger = logging.getLogger("apps.api.views")
 
@@ -4281,3 +4283,89 @@ class BilanView(APIView):
         )
         bilan_response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return bilan_response
+
+
+# ---------------------------------------------------------------------------
+# RGPD — Droit à l'effacement (Art. 17)
+# ---------------------------------------------------------------------------
+
+class GDPRErasureRequestView(APIView):
+    """POST /api/v1/auth/request-erasure/ — Demande de suppression de compte.
+
+    L'utilisateur authentifié soumet une demande d'effacement. Un
+    GDPRErasureRequest(status=pending) est créé. L'effacement effectif
+    (pseudonymisation) est réalisé par GDPRService.process_erasure_request()
+    appelé via l'endpoint admin ou la tâche Celery beat quotidienne.
+
+    Réponse 201: {"id": "<uuid>", "status": "pending", "requested_at": "..."}
+    Réponse 400: Si une demande pending existe déjà.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request) -> Response:
+        """Crée une demande d'effacement pour l'utilisateur courant.
+
+        Args:
+            request: Requête authentifiée.
+
+        Returns:
+            Response 201 avec la demande créée, ou 400 si doublon.
+        """
+        existing = GDPRErasureRequest.objects.filter(
+            user=request.user,
+            status=GDPRErasureRequest.STATUS_PENDING,
+        ).first()
+        if existing:
+            return Response(
+                {"detail": "Une demande d'effacement est déjà en cours."},
+                status=400,
+            )
+
+        erasure_req = GDPRErasureRequest.objects.create(user=request.user)
+        serializer = GDPRErasureRequestSerializer(erasure_req)
+        logger.info(
+            "gdpr.erasure_request.created user=%s request=%s",
+            request.user.id,
+            erasure_req.id,
+        )
+        return Response(serializer.data, status=201)
+
+
+class GDPRErasureProcessView(APIView):
+    """POST /api/v1/auth/erasure/<id>/process/ — Traite une demande (admin).
+
+    Réservé aux superusers. Pseudonymise l'utilisateur associé et marque
+    la demande comme traitée.
+
+    Réponse 200: {"detail": "Processed."}
+    Réponse 403: Si l'appelant n'est pas superuser.
+    Réponse 404: Si la demande n'existe pas.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk: str) -> Response:
+        """Traite une demande d'effacement (superuser uniquement).
+
+        Args:
+            request: Requête d'un superuser.
+            pk: UUID de la GDPRErasureRequest à traiter.
+
+        Returns:
+            Response 200 si succès, 403 si non autorisé, 404 si introuvable.
+        """
+        if not request.user.is_superuser:
+            return Response({"detail": "Réservé aux administrateurs."}, status=403)
+
+        try:
+            process_erasure_request(pk, processed_by_id=request.user.id)
+        except GDPRErasureRequest.DoesNotExist:
+            return Response({"detail": "Demande introuvable."}, status=404)
+
+        logger.info(
+            "gdpr.erasure_request.processed request=%s by admin=%s",
+            pk,
+            request.user.id,
+        )
+        return Response({"detail": "Traitement effectué."}, status=200)
