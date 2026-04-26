@@ -33,6 +33,7 @@ volumes:
   traefik-certs:
   pgadmin-data:
   frontend_node_modules:
+  akshi-postgres-data:
 
 
 services:
@@ -81,6 +82,9 @@ services:
       MINIO_ENDPOINT: http://minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      # Akshi — notifications plug-and-play
+      # Après avoir créé un channel webhook dans Akshi, collez l'URL ici :
+      # LEDGERMIND_NOTIFY_WEBHOOK_URL: http://akshi:8000/api/v1/notification-channels/<uuid>/trigger/
     depends_on:
       postgres:
         condition: service_healthy
@@ -370,3 +374,86 @@ services:
       - "traefik.http.routers.frontend.entrypoints=web"
       - "traefik.http.services.frontend.loadbalancer.server.port=3000"
     restart: unless-stopped
+
+
+  # ── AKSHI (SentinelOps) — Observabilité & Notifications ───────────────────
+  # Accessible : http://obs.localhost:8888
+  # Source    : https://github.com/FCHEHIDI/Akshi
+  #
+  # Pour activer :
+  #   1. docker compose --profile obs up
+  #   2. Créer un canal webhook dans Akshi (obs.localhost → Channels → Webhook)
+  #   3. Copier l'URL et la coller dans LEDGERMIND_NOTIFY_WEBHOOK_URL (django service ci-dessus)
+
+  akshi-db:
+    image: postgres:17-alpine
+    container_name: lm_akshi_db
+    networks: [backend]
+    environment:
+      POSTGRES_DB: sentinelops
+      POSTGRES_USER: sentinel
+      POSTGRES_PASSWORD: ${AKSHI_DB_PASSWORD:-sentinel_dev}
+    volumes:
+      - akshi-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sentinel -d sentinelops"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    profiles: [obs]
+
+  akshi:
+    # build: { context: ../../Akshi/backend }   # décommenter si clone local
+    image: ghcr.io/fchehidi/akshi:latest
+    container_name: lm_akshi
+    networks: [proxy, backend]
+    environment:
+      DATABASE_URL: postgres://sentinel:${AKSHI_DB_PASSWORD:-sentinel_dev}@akshi-db:5432/sentinelops
+      SECRET_KEY: ${AKSHI_SECRET_KEY:-akshi-dev-secret-change-me}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/1
+      DEBUG: "True"
+      ALLOWED_HOSTS: "obs.localhost,localhost"
+    depends_on:
+      akshi-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=ledgermind_proxy"
+      - "traefik.http.routers.akshi.rule=Host(`obs.localhost`)"
+      - "traefik.http.routers.akshi.entrypoints=web"
+      - "traefik.http.services.akshi.loadbalancer.server.port=8000"
+    restart: unless-stopped
+    profiles: [obs]
+
+  akshi-worker:
+    image: ghcr.io/fchehidi/akshi:latest
+    container_name: lm_akshi_worker
+    command: celery -A sentinelops worker -Q checks,notifications -l info -c 2
+    networks: [backend]
+    environment:
+      DATABASE_URL: postgres://sentinel:${AKSHI_DB_PASSWORD:-sentinel_dev}@akshi-db:5432/sentinelops
+      SECRET_KEY: ${AKSHI_SECRET_KEY:-akshi-dev-secret-change-me}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/1
+    depends_on:
+      - akshi
+      - akshi-db
+    restart: unless-stopped
+    profiles: [obs]
+
+  akshi-beat:
+    image: ghcr.io/fchehidi/akshi:latest
+    container_name: lm_akshi_beat
+    command: celery -A sentinelops beat -l info
+    networks: [backend]
+    environment:
+      DATABASE_URL: postgres://sentinel:${AKSHI_DB_PASSWORD:-sentinel_dev}@akshi-db:5432/sentinelops
+      SECRET_KEY: ${AKSHI_SECRET_KEY:-akshi-dev-secret-change-me}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/1
+    depends_on:
+      - akshi
+      - akshi-db
+    restart: unless-stopped
+    profiles: [obs]
