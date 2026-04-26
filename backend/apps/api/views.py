@@ -1411,7 +1411,7 @@ class OrganizationViewSet(
     """Liste des organisations accessibles à l'utilisateur courant.
 
     Endpoints:
-      GET /api/v1/organizations/         — liste des orgs de l'user
+      GET /api/v1/organizations/         — liste des orgs de l'user (avec rôle)
       GET /api/v1/organizations/<uuid>/  — détail d'une org
     """
 
@@ -1420,15 +1420,23 @@ class OrganizationViewSet(
     http_method_names = ["get", "head", "options"]
 
     def get_queryset(self):
-        """Retourne les organisations dont l'user est membre actif.
+        """Retourne les organisations dont l'user est membre actif, avec son rôle annoté.
 
         Returns:
-            QuerySet d'organisations accessibles.
+            QuerySet d'organisations annotées avec le champ `role`.
         """
+        from django.db.models import OuterRef, Subquery
+        role_subquery = TenantMembership.objects.filter(
+            user=self.request.user,
+            organization_id=OuterRef("pk"),
+            is_active=True,
+        ).values("role")[:1]
         org_ids = TenantMembership.objects.filter(
             user=self.request.user, is_active=True
         ).values_list("organization_id", flat=True)
-        return Organization.objects.filter(id__in=org_ids, is_active=True)
+        return Organization.objects.filter(
+            id__in=org_ids, is_active=True
+        ).annotate(role=Subquery(role_subquery))
 
 
 class DocumentUploadView(APIView):

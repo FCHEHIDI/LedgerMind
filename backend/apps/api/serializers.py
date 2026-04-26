@@ -25,16 +25,21 @@ logger = logging.getLogger("apps.api.serializers")
 
 
 class OrganizationSerializer(serializers.ModelSerializer):
-    """Serializer pour Organization — pas d'exposition du SIREN en clair.
+    """Serializer pour Organization — liste des orgs de l'utilisateur courant.
+
+    Le champ `role` est annoté par OrganizationViewSet.get_queryset() via
+    une valeur Subquery sur TenantMembership.
 
     Returns:
-      id, name, is_active, created_at
+      id, name, siren, role, is_active, created_at
     """
+
+    role = serializers.CharField(read_only=True, default="")
 
     class Meta:
         model = Organization
-        fields = ["id", "name", "is_active", "created_at"]
-        read_only_fields = ["id", "created_at"]
+        fields = ["id", "name", "siren", "role", "is_active", "created_at"]
+        read_only_fields = ["id", "siren", "created_at"]
 
 
 class InvoiceSerializer(serializers.ModelSerializer):
