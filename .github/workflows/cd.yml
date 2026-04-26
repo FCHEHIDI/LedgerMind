@@ -1,4 +1,4 @@
-name: CD — Deploy (placeholder)
+name: CD — Build & Deploy
 
 on:
   push:
@@ -89,13 +89,58 @@ jobs:
           cache-to: type=gha,mode=max
 
   # ─────────────────────────────────────────────
-  # 3. Deploy staging
+  # 3. Build Docker image (frontend Next.js)
+  #    Publié sur ghcr.io — GITHUB_TOKEN, aucun secret externe requis
+  # ─────────────────────────────────────────────
+  build-frontend:
+    name: Build frontend image
+    runs-on: ubuntu-latest
+    needs: ci-gate
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/ledgermind-frontend
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: frontend/
+          file: frontend/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL || 'http://api.localhost:8888' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ─────────────────────────────────────────────
+  # 4. Deploy staging
   # ─────────────────────────────────────────────
   deploy-staging:
     name: Deploy → staging
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build, build-frontend]
     environment: staging
+    # Skip gracefully when SSH secrets are not configured
+    if: ${{ secrets.STAGING_HOST != '' && secrets.DEPLOY_SSH_KEY != '' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -114,13 +159,15 @@ jobs:
             docker compose exec -T backend python manage.py collectstatic --no-input
 
   # ─────────────────────────────────────────────
-  # 4. Deploy production (manuel uniquement)
+  # 5. Deploy production (manuel uniquement)
   # ─────────────────────────────────────────────
   deploy-production:
     name: Deploy → production
     runs-on: ubuntu-latest
     needs: deploy-staging
     environment: production   # requiert approbation manuelle dans GitHub
+    # Skip gracefully when SSH secrets are not configured
+    if: ${{ secrets.PROD_HOST != '' && secrets.DEPLOY_SSH_KEY != '' }}
 
     steps:
       - uses: actions/checkout@v4

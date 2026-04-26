@@ -6,6 +6,8 @@ const DJANGO_URL =
 const nextConfig: NextConfig = {
   // Empêche Next.js de rediriger /foo/ → /foo (les API Django nécessitent le trailing slash)
   skipTrailingSlashRedirect: true,
+  // Produit un output autonome (node server.js) pour les images Docker de production
+  output: "standalone",
   async rewrites() {
     return [
       {
