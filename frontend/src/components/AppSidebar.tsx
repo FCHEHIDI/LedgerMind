@@ -7,6 +7,9 @@ import { useRouter } from "next/navigation";
 const NAV_ITEMS = [
   { label: "Tableau de bord", href: "/app/dashboard", icon: "⊞" },
   { label: "Écritures", href: "/app/ledger", icon: "≡" },
+  { label: "Rapports", href: "/app/reports", icon: "◫" },
+  { label: "Rapprochement", href: "/app/bank", icon: "⇌" },
+  { label: "Lettrage", href: "/app/ledger/lettrage", icon: "⊕" },
   { label: "Documents", href: "/app/documents", icon: "⊡" },
   { label: "Conformité", href: "/app/compliance", icon: "✓" },
 ];
@@ -32,7 +35,10 @@ export default function AppSidebar() {
       {/* Navigation */}
       <nav className="flex-1 space-y-0.5 px-3 py-4">
         {NAV_ITEMS.map(({ label, href, icon }) => {
-          const active = pathname.startsWith(href);
+          const active =
+            href === "/app/ledger"
+              ? pathname === "/app/ledger" || pathname.startsWith("/app/ledger/") && !pathname.startsWith("/app/ledger/lettrage")
+              : pathname.startsWith(href);
           return (
             <Link
               key={href}
