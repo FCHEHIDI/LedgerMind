@@ -19,11 +19,16 @@ interface UploadError {
  *
  * POSTs to /api/documents/upload (Next.js proxy → Django).
  * On success, calls onSuccess(result) so the parent page can refresh the list.
+ * Calls onUploadStart() the moment the HTTP request is fired, so the parent
+ * can immediately show a "loading document" indicator without waiting for the
+ * first polling cycle.
  */
 export default function UploadForm({
   onSuccess,
+  onUploadStart,
 }: {
   onSuccess: (r: UploadResult) => void;
+  onUploadStart?: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -43,6 +48,7 @@ export default function UploadForm({
     }
 
     setUploading(true);
+    onUploadStart?.();
     try {
       const body = new FormData();
       body.append("file", file);
