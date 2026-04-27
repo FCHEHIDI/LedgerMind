@@ -4,6 +4,11 @@
 # Traefik reverse proxy — seul point d'entrée public
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Charge le .env à la racine du projet (répertoire parent de docker/)
+# sans avoir à passer --env-file à chaque commande
+env_file:
+  - ../.env
+
 networks:
   # Trafic HTTP entrant — Traefik + Django (port 8000) + Next.js + MinIO console
   proxy:

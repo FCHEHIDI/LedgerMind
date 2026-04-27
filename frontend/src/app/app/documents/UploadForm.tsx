@@ -99,17 +99,19 @@ export default function UploadForm({
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
         onClick={() => !uploading && inputRef.current?.click()}
-        className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-6 py-10 transition-colors
-          ${dragging ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30" : "border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 hover:border-zinc-400 dark:hover:border-zinc-600"}
-          ${uploading ? "pointer-events-none opacity-60" : ""}`}
+        className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-6 py-10 transition-colors ${uploading ? "pointer-events-none opacity-60" : ""}`}
+        style={{
+          background: dragging ? "rgba(245,158,11,0.04)" : "var(--bg-root)",
+          borderColor: dragging ? "var(--amber-500)" : "var(--border)",
+        }}
       >
         <span className="text-3xl">📄</span>
-        <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+        <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
           {uploading
             ? "Envoi en cours…"
             : "Glissez un PDF ou cliquez pour parcourir"}
         </p>
-        <p className="text-xs text-zinc-500 dark:text-zinc-500">
+        <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
           PDF uniquement · max 20 Mo
         </p>
       </div>
@@ -124,7 +126,7 @@ export default function UploadForm({
       />
 
       {error && (
-        <p className="rounded-lg bg-red-50 dark:bg-red-950/40 px-4 py-2 text-sm text-red-600 dark:text-red-400">
+        <p className="rounded-lg px-4 py-2 text-sm" style={{ background: "var(--danger-bg)", color: "var(--danger)" }}>
           {error}
         </p>
       )}

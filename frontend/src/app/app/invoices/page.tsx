@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { Plus, Receipt } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -45,28 +46,13 @@ const STATUS_LABELS: Record<string, string> = {
   error: "Erreur",
 };
 
-const STATUS_STYLES: Record<string, string> = {
-  pending:
-    "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
-  processing:
-    "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-400",
-  extracted:
-    "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400",
-  validated:
-    "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400",
-  rejected:
-    "bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-400",
-  error:
-    "bg-orange-50 text-orange-600 dark:bg-orange-950 dark:text-orange-400",
-};
-
-const STATUS_DOT: Record<string, string> = {
-  pending: "bg-zinc-400",
-  processing: "bg-blue-500",
-  extracted: "bg-amber-500",
-  validated: "bg-emerald-500",
-  rejected: "bg-red-500",
-  error: "bg-orange-500",
+const STATUS_CONFIG: Record<string, { color: string; bg: string; border: string; dot: string }> = {
+  pending:    { color: "var(--text-tertiary)", bg: "var(--bg-root)",    border: "var(--border)",          dot: "var(--text-tertiary)" },
+  processing: { color: "#2563EB",              bg: "#EFF6FF",           border: "#BFDBFE",                dot: "#3B82F6" },
+  extracted:  { color: "var(--warning)",       bg: "var(--warning-bg)", border: "var(--warning-border)",  dot: "var(--warning)" },
+  validated:  { color: "var(--success)",       bg: "var(--success-bg)", border: "var(--success-border)",  dot: "var(--success)" },
+  rejected:   { color: "var(--danger)",        bg: "var(--danger-bg)",  border: "var(--danger-border)",   dot: "var(--danger)" },
+  error:      { color: "var(--danger)",        bg: "var(--danger-bg)",  border: "var(--danger-border)",   dot: "var(--danger)" },
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -87,6 +73,26 @@ function fmtDate(val: string | null | undefined): string {
   const d = new Date(val);
   if (isNaN(d.getTime())) return "—";
   return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.pending;
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium"
+      style={{ color: cfg.color, background: cfg.bg, border: `1px solid ${cfg.border}` }}
+    >
+      {status === "processing" ? (
+        <span className="relative flex h-1.5 w-1.5">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: cfg.dot }} />
+          <span className="relative inline-flex rounded-full h-1.5 w-1.5" style={{ background: cfg.dot }} />
+        </span>
+      ) : (
+        <span className="h-1.5 w-1.5 rounded-full" style={{ background: cfg.dot }} />
+      )}
+      {STATUS_LABELS[status] ?? status}
+    </span>
+  );
 }
 
 // ── New Invoice Modal ─────────────────────────────────────────────────────────
@@ -142,112 +148,112 @@ function NewInvoiceModal({ onClose, onCreated }: NewInvoiceModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-zinc-900 shadow-2xl border border-zinc-200 dark:border-zinc-800">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-zinc-800">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Nouvelle facture</h2>
-          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors text-lg">✕</button>
+      <div
+        className="w-full max-w-lg rounded-2xl"
+        style={{ background: "var(--bg-card)", border: "1px solid var(--border)", boxShadow: "var(--shadow-md)" }}
+      >
+        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: "1px solid var(--border-light)" }}>
+          <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Nouvelle facture</h2>
+          <button onClick={onClose} className="text-lg transition-colors" style={{ color: "var(--text-tertiary)" }}>✕</button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {/* Row 1: reference + date */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-zinc-500 mb-1">Référence</label>
+              <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Référence</label>
               <input
                 type="text"
                 value={form.reference}
                 onChange={(e) => set("reference", e.target.value)}
                 placeholder="FA-2024-001"
-                className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+                className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+                style={{ background: "var(--bg-root)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
+                onFocus={(e) => { e.target.style.border = "1px solid var(--amber-400)"; e.target.style.boxShadow = "0 0 0 3px rgba(245,158,11,0.12)"; }}
+                onBlur={(e) => { e.target.style.border = "1px solid var(--border)"; e.target.style.boxShadow = "none"; }}
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-zinc-500 mb-1">Date facture</label>
+              <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Date facture</label>
               <input
                 type="date"
                 value={form.invoice_date}
                 onChange={(e) => set("invoice_date", e.target.value)}
-                className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+                className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+                style={{ background: "var(--bg-root)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
+                onFocus={(e) => { e.target.style.border = "1px solid var(--amber-400)"; e.target.style.boxShadow = "0 0 0 3px rgba(245,158,11,0.12)"; }}
+                onBlur={(e) => { e.target.style.border = "1px solid var(--border)"; e.target.style.boxShadow = "none"; }}
               />
             </div>
           </div>
           {/* Row 2: vendor name + SIREN */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-zinc-500 mb-1">Fournisseur</label>
+              <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Fournisseur</label>
               <input
                 type="text"
                 value={form.vendor_name}
                 onChange={(e) => set("vendor_name", e.target.value)}
                 placeholder="Acme SARL"
-                className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+                className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+                style={{ background: "var(--bg-root)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
+                onFocus={(e) => { e.target.style.border = "1px solid var(--amber-400)"; e.target.style.boxShadow = "0 0 0 3px rgba(245,158,11,0.12)"; }}
+                onBlur={(e) => { e.target.style.border = "1px solid var(--border)"; e.target.style.boxShadow = "none"; }}
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-zinc-500 mb-1">SIREN</label>
+              <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-secondary)" }}>SIREN</label>
               <input
                 type="text"
                 value={form.vendor_siren}
                 onChange={(e) => set("vendor_siren", e.target.value)}
                 placeholder="123456789"
                 maxLength={9}
-                className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-400 font-mono"
+                className="w-full rounded-lg px-3 py-2 text-sm outline-none font-mono"
+                style={{ background: "var(--bg-root)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
+                onFocus={(e) => { e.target.style.border = "1px solid var(--amber-400)"; e.target.style.boxShadow = "0 0 0 3px rgba(245,158,11,0.12)"; }}
+                onBlur={(e) => { e.target.style.border = "1px solid var(--border)"; e.target.style.boxShadow = "none"; }}
               />
             </div>
           </div>
           {/* Row 3: HT / TVA / TTC */}
           <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-zinc-500 mb-1">Montant HT</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={form.ht_amount}
-                onChange={(e) => set("ht_amount", e.target.value)}
-                placeholder="0.00"
-                className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-400"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-zinc-500 mb-1">TVA</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={form.tva_amount}
-                onChange={(e) => set("tva_amount", e.target.value)}
-                placeholder="0.00"
-                className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-400"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-zinc-500 mb-1">TTC</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={form.ttc_amount}
-                onChange={(e) => set("ttc_amount", e.target.value)}
-                placeholder="0.00"
-                className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-400"
-              />
-            </div>
+            {(["ht_amount", "tva_amount", "ttc_amount"] as const).map((field, i) => (
+              <div key={field}>
+                <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-secondary)" }}>
+                  {["Montant HT", "TVA", "TTC"][i]}
+                </label>
+                <input
+                  type="number" step="0.01" min="0"
+                  value={form[field]}
+                  onChange={(e) => set(field, e.target.value)}
+                  placeholder="0.00"
+                  className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+                  style={{ background: "var(--bg-root)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
+                  onFocus={(e) => { e.target.style.border = "1px solid var(--amber-400)"; e.target.style.boxShadow = "0 0 0 3px rgba(245,158,11,0.12)"; }}
+                  onBlur={(e) => { e.target.style.border = "1px solid var(--border)"; e.target.style.boxShadow = "none"; }}
+                />
+              </div>
+            ))}
           </div>
 
-          {error && <p className="text-sm text-red-500">{error}</p>}
+          {error && <p className="text-sm" style={{ color: "var(--danger)" }}>{error}</p>}
 
           <div className="flex justify-end gap-3 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-zinc-200 dark:border-zinc-700 px-4 py-2 text-sm text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+              className="rounded-lg px-4 py-2 text-sm transition-colors"
+              style={{ color: "var(--text-secondary)" }}
             >
               Annuler
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-4 py-2 text-sm font-medium hover:bg-zinc-700 dark:hover:bg-zinc-200 disabled:opacity-50 transition-colors"
+              className="rounded-lg px-4 py-2 text-sm font-medium transition-all disabled:opacity-50 text-white"
+              style={{ background: "var(--amber-600)", boxShadow: "var(--shadow-amber)" }}
+              onMouseEnter={(e) => { if (!loading) e.currentTarget.style.background = "var(--amber-700)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "var(--amber-600)"; }}
             >
               {loading ? "Création…" : "Créer la facture"}
             </button>
@@ -323,27 +329,28 @@ function InvoiceDrawer({ invoice, onClose, onActionDone }: InvoiceDrawerProps) {
 
   if (!invoice) return null;
 
+  const entryCfg = entry ? (STATUS_CONFIG[entry.status] ?? STATUS_CONFIG.pending) : null;
+
   return (
     <>
-      {/* Backdrop */}
       <div className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm" onClick={onClose} />
-      {/* Panel */}
-      <div className="fixed right-0 top-0 z-50 h-full w-full max-w-xl bg-white dark:bg-zinc-900 shadow-2xl flex flex-col border-l border-zinc-200 dark:border-zinc-800 overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 shrink-0">
+      <div
+        className="fixed right-0 top-0 z-50 h-full w-full max-w-xl flex flex-col overflow-hidden"
+        style={{ background: "var(--bg-card)", borderLeft: "1px solid var(--border)", boxShadow: "var(--shadow-md)" }}
+      >
+        <div className="flex items-center justify-between px-6 py-4 shrink-0" style={{ borderBottom: "1px solid var(--border-light)" }}>
           <div>
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-              Facture — {invoice.reference || <span className="text-zinc-400 font-normal">sans référence</span>}
+            <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+              Facture — {invoice.reference || <span style={{ color: "var(--text-tertiary)", fontWeight: 400 }}>sans référence</span>}
             </h2>
-            <p className="text-xs text-zinc-500 mt-0.5">{invoice.vendor_name || "Fournisseur inconnu"}</p>
+            <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>{invoice.vendor_name || "Fournisseur inconnu"}</p>
           </div>
-          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors text-lg">✕</button>
+          <button onClick={onClose} className="text-lg" style={{ color: "var(--text-tertiary)" }}>✕</button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
-          {/* Invoice summary */}
           <section>
-            <h3 className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-3">Données extraites par l’IA</h3>
+            <h3 className="text-xs font-medium uppercase tracking-wide mb-3" style={{ color: "var(--text-tertiary)" }}>Données extraites par l&apos;IA</h3>
             <div className="grid grid-cols-2 gap-3">
               {([
                 { label: "Fournisseur", value: invoice.vendor_name },
@@ -354,62 +361,56 @@ function InvoiceDrawer({ invoice, onClose, onActionDone }: InvoiceDrawerProps) {
                 { label: "TVA", value: fmt(invoice.tva_amount) },
                 { label: "TTC", value: fmt(invoice.ttc_amount) },
               ] as { label: string; value: string }[]).map(({ label, value }) => (
-                <div key={label} className="rounded-lg bg-zinc-50 dark:bg-zinc-800/60 px-3 py-2">
-                  <p className="text-xs text-zinc-400 mb-0.5">{label}</p>
-                  <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200 truncate">{value || "—"}</p>
+                <div key={label} className="rounded-lg px-3 py-2" style={{ background: "var(--bg-root)" }}>
+                  <p className="text-xs mb-0.5" style={{ color: "var(--text-tertiary)" }}>{label}</p>
+                  <p className="text-sm font-medium truncate" style={{ color: "var(--text-primary)" }}>{value || "—"}</p>
                 </div>
               ))}
             </div>
           </section>
 
-          {/* Journal entry */}
           <section>
-            <h3 className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-3">Écriture comptable générée</h3>
+            <h3 className="text-xs font-medium uppercase tracking-wide mb-3" style={{ color: "var(--text-tertiary)" }}>Écriture comptable générée</h3>
             {loadingEntry ? (
               <div className="space-y-2">
                 {[1, 2, 3].map((i) => (
-                  <div key={i} className="h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
+                  <div key={i} className="h-10 rounded-lg animate-pulse" style={{ background: "var(--bg-root)" }} />
                 ))}
               </div>
             ) : !entry ? (
-              <div className="rounded-xl border border-dashed border-zinc-200 dark:border-zinc-700 px-4 py-6 text-center text-xs text-zinc-400">
+              <div className="rounded-xl px-4 py-6 text-center text-xs border-2 border-dashed" style={{ borderColor: "var(--border)", color: "var(--text-tertiary)" }}>
                 {invoice.status === "processing" ? "Traitement en cours…" : "Aucune écriture générée."}
               </div>
             ) : (
-              <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
-                <div className="flex items-center justify-between px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800/50 border-b border-zinc-100 dark:border-zinc-800">
+              <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border)" }}>
+                <div className="flex items-center justify-between px-4 py-2.5" style={{ background: "var(--bg-root)", borderBottom: "1px solid var(--border-light)" }}>
                   <div className="flex items-center gap-3">
-                    <span className="text-xs font-mono text-zinc-500">{entry.reference || entry.id.slice(0, 8)}</span>
-                    <span className="text-xs text-zinc-400">{entry.journal_code} · {fmtDate(entry.entry_date)}</span>
+                    <span className="text-xs font-mono" style={{ color: "var(--text-secondary)" }}>{entry.reference || entry.id.slice(0, 8)}</span>
+                    <span className="text-xs" style={{ color: "var(--text-tertiary)" }}>{entry.journal_code} · {fmtDate(entry.entry_date)}</span>
                   </div>
-                  <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${
-                    entry.status === "draft" ? "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400" :
-                    entry.status === "posted" ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400" :
-                    "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
-                  }`}>
-                    <span className={`h-1.5 w-1.5 rounded-full ${
-                      entry.status === "draft" ? "bg-amber-500" :
-                      entry.status === "posted" ? "bg-emerald-500" : "bg-zinc-400"
-                    }`} />
-                    {entry.status === "draft" ? "Brouillon" : entry.status === "posted" ? "Validée" : entry.status}
-                  </span>
+                  {entryCfg && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium" style={{ color: entryCfg.color, background: entryCfg.bg, border: `1px solid ${entryCfg.border}` }}>
+                      <span className="h-1.5 w-1.5 rounded-full" style={{ background: entryCfg.dot }} />
+                      {STATUS_LABELS[entry.status] ?? entry.status}
+                    </span>
+                  )}
                 </div>
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="text-zinc-400 border-b border-zinc-100 dark:border-zinc-800">
+                    <tr style={{ borderBottom: "1px solid var(--border-light)", color: "var(--text-tertiary)" }}>
                       <th className="px-4 py-2 text-left font-medium">Compte</th>
                       <th className="px-4 py-2 text-left font-medium">Libellé</th>
                       <th className="px-4 py-2 text-right font-medium">Débit</th>
                       <th className="px-4 py-2 text-right font-medium">Crédit</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                  <tbody>
                     {entry.lines.map((line) => (
-                      <tr key={line.id} className="text-zinc-700 dark:text-zinc-300">
-                        <td className="px-4 py-2 font-mono">{line.account_code}</td>
-                        <td className="px-4 py-2 text-zinc-500 dark:text-zinc-400 max-w-[140px] truncate">{line.account_label}</td>
-                        <td className="px-4 py-2 text-right font-mono">{parseFloat(line.debit) > 0 ? fmt(line.debit) : ""}</td>
-                        <td className="px-4 py-2 text-right font-mono">{parseFloat(line.credit) > 0 ? fmt(line.credit) : ""}</td>
+                      <tr key={line.id} style={{ borderBottom: "1px solid var(--border-light)" }}>
+                        <td className="px-4 py-2 font-mono" style={{ color: "var(--text-primary)" }}>{line.account_code}</td>
+                        <td className="px-4 py-2 max-w-35 truncate" style={{ color: "var(--text-secondary)" }}>{line.account_label}</td>
+                        <td className="px-4 py-2 text-right font-mono" style={{ color: "var(--text-primary)" }}>{parseFloat(line.debit) > 0 ? fmt(line.debit) : ""}</td>
+                        <td className="px-4 py-2 text-right font-mono" style={{ color: "var(--text-primary)" }}>{parseFloat(line.credit) > 0 ? fmt(line.credit) : ""}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -419,28 +420,33 @@ function InvoiceDrawer({ invoice, onClose, onActionDone }: InvoiceDrawerProps) {
           </section>
 
           {actionError && (
-            <div className="rounded-xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/20 px-4 py-3 text-sm text-red-600 dark:text-red-400">
+            <div className="rounded-xl px-4 py-3 text-sm" style={{ background: "var(--danger-bg)", border: "1px solid var(--danger-border)", color: "var(--danger)" }}>
               {actionError}
             </div>
           )}
         </div>
 
-        {/* Footer actions */}
         {entry?.status === "draft" && (
-          <div className="shrink-0 px-6 py-4 border-t border-zinc-100 dark:border-zinc-800 flex gap-3">
+          <div className="shrink-0 px-6 py-4 flex gap-3" style={{ borderTop: "1px solid var(--border-light)" }}>
             <button
               onClick={() => handleAction("cancel")}
               disabled={actionLoading !== null}
-              className="flex-1 rounded-lg border border-red-200 dark:border-red-800 px-4 py-2.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 disabled:opacity-40 transition-colors"
+              className="flex-1 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors disabled:opacity-40"
+              style={{ border: "1px solid var(--danger-border)", color: "var(--danger)", background: "transparent" }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--danger-bg)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
             >
               {actionLoading === "cancel" ? "Annulation…" : "Rejeter"}
             </button>
             <button
               onClick={() => handleAction("validate")}
               disabled={actionLoading !== null}
-              className="flex-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 text-sm font-medium disabled:opacity-40 transition-colors"
+              className="flex-1 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors disabled:opacity-40 text-white"
+              style={{ background: "var(--success)" }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "#047857")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "var(--success)")}
             >
-              {actionLoading === "validate" ? "Validation…" : "Valider l’écriture"}
+              {actionLoading === "validate" ? "Validation…" : "Valider l'écriture"}
             </button>
           </div>
         )}
@@ -451,11 +457,6 @@ function InvoiceDrawer({ invoice, onClose, onActionDone }: InvoiceDrawerProps) {
 
 // ── Stats bar ─────────────────────────────────────────────────────────────────
 
-interface StatusCount {
-  status: string;
-  count: number;
-}
-
 function StatsBar({ invoices }: { invoices: Invoice[] }) {
   const counts = STATUSES.slice(1).map((s) => ({
     ...s,
@@ -464,18 +465,18 @@ function StatsBar({ invoices }: { invoices: Invoice[] }) {
 
   return (
     <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
-      {counts.map(({ value, label, count }) => (
-        <div
-          key={value}
-          className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4 py-3"
-        >
-          <div className="flex items-center gap-2 mb-1">
-            <span className={`h-2 w-2 rounded-full ${STATUS_DOT[value]}`} />
-            <span className="text-xs text-zinc-500 dark:text-zinc-400 truncate">{label}</span>
+      {counts.map(({ value, label, count }) => {
+        const cfg = STATUS_CONFIG[value] ?? STATUS_CONFIG.pending;
+        return (
+          <div key={value} className="rounded-xl px-4 py-3" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="h-2 w-2 rounded-full" style={{ background: cfg.dot }} />
+              <span className="text-xs truncate" style={{ color: "var(--text-tertiary)" }}>{label}</span>
+            </div>
+            <p className="text-xl font-semibold" style={{ color: "var(--text-primary)" }}>{count}</p>
           </div>
-          <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">{count}</p>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -488,13 +489,11 @@ export default function InvoicesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Filters
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 20;
 
-  // Modal / Drawer
   const [showModal, setShowModal] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
 
@@ -507,7 +506,6 @@ export default function InvoicesPage() {
       if (status) params.set("status", status);
       params.set("page", String(page));
       params.set("page_size", String(PAGE_SIZE));
-
       const res = await fetch(`/api/invoices?${params}`);
       if (!res.ok) throw new Error(`Erreur ${res.status}`);
       const data: InvoiceListResponse | Invoice[] = await res.json();
@@ -525,36 +523,43 @@ export default function InvoicesPage() {
     }
   }, [search, status, page]);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  // Reset page when filters change
-  useEffect(() => {
-    setPage(1);
-  }, [search, status]);
+  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { setPage(1); }, [search, status]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  const inputStyle = { background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-primary)" };
+  const inputFocus = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) => {
+    e.target.style.border = "1px solid var(--amber-400)";
+    e.target.style.boxShadow = "0 0 0 3px rgba(245,158,11,0.12)";
+  };
+  const inputBlur = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) => {
+    e.target.style.border = "1px solid var(--border)";
+    e.target.style.boxShadow = "none";
+  };
 
   return (
     <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">Factures</h1>
-          <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
+          <h1 className="text-xl font-semibold" style={{ color: "var(--text-primary)" }}>Factures</h1>
+          <p className="mt-0.5 text-sm" style={{ color: "var(--text-secondary)" }}>
             {total > 0 ? `${total} facture${total > 1 ? "s" : ""}` : "Aucune facture"}
           </p>
         </div>
         <button
           onClick={() => setShowModal(true)}
-          className="rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-4 py-2 text-sm font-medium hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors"
+          className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white transition-all"
+          style={{ background: "var(--amber-600)", boxShadow: "var(--shadow-amber)" }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--amber-700)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--amber-600)")}
         >
-          + Nouvelle facture
+          <Plus size={14} />
+          Nouvelle facture
         </button>
       </div>
 
-      {/* Stats */}
       {invoices.length > 0 && <StatsBar invoices={invoices} />}
 
       {/* Filters */}
@@ -564,58 +569,65 @@ export default function InvoicesPage() {
           placeholder="Référence, fournisseur…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-400 w-60"
+          className="rounded-lg px-3 py-2 text-sm outline-none w-60"
+          style={inputStyle}
+          onFocus={inputFocus}
+          onBlur={inputBlur}
         />
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value)}
-          className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+          className="rounded-lg px-3 py-2 text-sm outline-none"
+          style={inputStyle}
+          onFocus={inputFocus}
+          onBlur={inputBlur}
         >
-          {STATUSES.map((s) => (
-            <option key={s.value} value={s.value}>
-              {s.label}
-            </option>
-          ))}
+          {STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
         </select>
       </div>
 
-      {/* Error */}
       {error && (
-        <div className="rounded-xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/20 px-4 py-3 text-sm text-red-600 dark:text-red-400">
+        <div className="rounded-xl px-4 py-3 text-sm" style={{ background: "var(--danger-bg)", border: "1px solid var(--danger-border)", color: "var(--danger)" }}>
           {error}
         </div>
       )}
 
-      {/* Table */}
       {loading ? (
         <div className="space-y-2">
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="h-14 rounded-xl bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
+            <div key={i} className="h-14 rounded-xl animate-pulse" style={{ background: "var(--bg-card)" }} />
           ))}
         </div>
       ) : invoices.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 py-20 gap-3 text-center">
-          <div className="rounded-full bg-zinc-100 dark:bg-zinc-800 p-4 text-2xl">🧾</div>
-          <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Aucune facture</p>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-xs">
-            {search || status
-              ? "Aucun résultat pour ces filtres."
-              : "Créez votre première facture ou importez des documents via le module Documents."}
+        <div
+          className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed py-20 gap-3 text-center"
+          style={{ borderColor: "var(--border)", background: "var(--bg-card)" }}
+        >
+          <div className="rounded-full p-4" style={{ background: "var(--bg-root)" }}>
+            <Receipt size={24} style={{ color: "var(--text-tertiary)" }} />
+          </div>
+          <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>Aucune facture</p>
+          <p className="text-xs max-w-xs" style={{ color: "var(--text-secondary)" }}>
+            {search || status ? "Aucun résultat pour ces filtres." : "Créez votre première facture ou importez des documents via le module Documents."}
           </p>
           {!search && !status && (
             <button
               onClick={() => setShowModal(true)}
-              className="mt-2 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-4 py-2 text-sm font-medium hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors"
+              className="mt-2 rounded-lg px-4 py-2 text-sm font-medium text-white"
+              style={{ background: "var(--amber-600)" }}
             >
               + Nouvelle facture
             </button>
           )}
         </div>
       ) : (
-        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden shadow-sm">
+        <div
+          className="rounded-xl overflow-hidden"
+          style={{ border: "1px solid var(--border)", background: "var(--bg-card)", boxShadow: "var(--shadow-sm)" }}
+        >
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-zinc-100 dark:border-zinc-800 text-xs text-zinc-500 dark:text-zinc-400">
+              <tr className="text-xs" style={{ borderBottom: "1px solid var(--border-light)", color: "var(--text-tertiary)" }}>
                 <th className="px-4 py-3 text-left font-medium">Référence</th>
                 <th className="px-4 py-3 text-left font-medium">Fournisseur</th>
                 <th className="px-4 py-3 text-left font-medium hidden sm:table-cell">SIREN</th>
@@ -626,41 +638,39 @@ export default function InvoicesPage() {
                 <th className="px-4 py-3 text-left font-medium">Statut</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            <tbody>
               {invoices.map((inv) => (
                 <tr
                   key={inv.id}
                   onClick={() => setSelectedInvoice(inv)}
-                  className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors cursor-pointer"
+                  className="cursor-pointer transition-colors"
+                  style={{ borderBottom: "1px solid var(--border-light)" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-root)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
-                  <td className="px-4 py-3 font-mono text-xs text-zinc-700 dark:text-zinc-300">
-                    {inv.reference || <span className="text-zinc-400">—</span>}
+                  <td className="px-4 py-3 font-mono text-xs" style={{ color: "var(--text-primary)" }}>
+                    {inv.reference || <span style={{ color: "var(--text-tertiary)" }}>—</span>}
                   </td>
-                  <td className="px-4 py-3 text-zinc-800 dark:text-zinc-200 max-w-[160px] truncate">
-                    {inv.vendor_name || <span className="text-zinc-400">—</span>}
+                  <td className="px-4 py-3 max-w-40 truncate" style={{ color: "var(--text-primary)" }}>
+                    {inv.vendor_name || <span style={{ color: "var(--text-tertiary)" }}>—</span>}
                   </td>
-                  <td className="px-4 py-3 font-mono text-xs text-zinc-500 dark:text-zinc-400 hidden sm:table-cell">
+                  <td className="px-4 py-3 font-mono text-xs hidden sm:table-cell" style={{ color: "var(--text-secondary)" }}>
                     {inv.vendor_siren || "—"}
                   </td>
-                  <td className="px-4 py-3 text-zinc-500 dark:text-zinc-400 hidden md:table-cell whitespace-nowrap">
+                  <td className="px-4 py-3 hidden md:table-cell whitespace-nowrap" style={{ color: "var(--text-secondary)" }}>
                     {fmtDate(inv.invoice_date)}
                   </td>
-                  <td className="px-4 py-3 text-right font-mono text-xs text-zinc-700 dark:text-zinc-300 whitespace-nowrap">
+                  <td className="px-4 py-3 text-right font-mono text-xs whitespace-nowrap" style={{ color: "var(--text-primary)" }}>
                     {fmt(inv.ht_amount)}
                   </td>
-                  <td className="px-4 py-3 text-right font-mono text-xs text-zinc-500 dark:text-zinc-400 whitespace-nowrap hidden sm:table-cell">
+                  <td className="px-4 py-3 text-right font-mono text-xs whitespace-nowrap hidden sm:table-cell" style={{ color: "var(--text-secondary)" }}>
                     {fmt(inv.tva_amount)}
                   </td>
-                  <td className="px-4 py-3 text-right font-mono text-xs font-medium text-zinc-900 dark:text-zinc-100 whitespace-nowrap">
+                  <td className="px-4 py-3 text-right font-mono text-xs font-medium whitespace-nowrap" style={{ color: "var(--text-primary)" }}>
                     {fmt(inv.ttc_amount)}
                   </td>
                   <td className="px-4 py-3">
-                    <span
-                      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[inv.status] ?? STATUS_STYLES.pending}`}
-                    >
-                      <span className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT[inv.status] ?? STATUS_DOT.pending}`} />
-                      {STATUS_LABELS[inv.status] ?? inv.status}
-                    </span>
+                    <StatusBadge status={inv.status} />
                   </td>
                 </tr>
               ))}
@@ -669,24 +679,27 @@ export default function InvoicesPage() {
         </div>
       )}
 
-      {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm text-zinc-500 dark:text-zinc-400">
-          <span>
-            Page {page} / {totalPages}
-          </span>
+        <div className="flex items-center justify-between text-sm" style={{ color: "var(--text-secondary)" }}>
+          <span>Page {page} / {totalPages}</span>
           <div className="flex gap-2">
             <button
               disabled={page <= 1}
               onClick={() => setPage((p) => p - 1)}
-              className="rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-1.5 text-xs hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="rounded-lg px-3 py-1.5 text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ border: "1px solid var(--border)", color: "var(--text-primary)", background: "transparent" }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-root)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
             >
               ← Précédent
             </button>
             <button
               disabled={page >= totalPages}
               onClick={() => setPage((p) => p + 1)}
-              className="rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-1.5 text-xs hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="rounded-lg px-3 py-1.5 text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ border: "1px solid var(--border)", color: "var(--text-primary)", background: "transparent" }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-root)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
             >
               Suivant →
             </button>
@@ -694,20 +707,8 @@ export default function InvoicesPage() {
         </div>
       )}
 
-      {/* Modal */}
-      {showModal && (
-        <NewInvoiceModal
-          onClose={() => setShowModal(false)}
-          onCreated={load}
-        />
-      )}
-
-      {/* Invoice Drawer */}
-      <InvoiceDrawer
-        invoice={selectedInvoice}
-        onClose={() => setSelectedInvoice(null)}
-        onActionDone={load}
-      />
+      {showModal && <NewInvoiceModal onClose={() => setShowModal(false)} onCreated={load} />}
+      <InvoiceDrawer invoice={selectedInvoice} onClose={() => setSelectedInvoice(null)} onActionDone={load} />
     </div>
   );
 }

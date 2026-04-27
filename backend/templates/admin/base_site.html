@@ -1,0 +1,236 @@
+{% extends "admin/base.html" %}
+{% load i18n %}
+
+{% block title %}LedgerMind Admin{% endblock %}
+
+{% block branding %}
+<h1 id="site-name">
+  <a href="{% url 'admin:index' %}">
+    <span class="lm-brand-name">LedgerMind</span>
+    <span class="lm-brand-suffix">Admin</span>
+  </a>
+</h1>
+{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+  /* ── Design tokens LedgerMind ──────────────────────────────── */
+  :root {
+    --lm-bg-sidebar:    #131110;
+    --lm-bg-root:       #F7F5F2;
+    --lm-amber-500:     #F59E0B;
+    --lm-amber-600:     #D97706;
+    --lm-amber-700:     #B45309;
+    --lm-text-primary:  #1A1714;
+    --lm-text-muted:    #6B6460;
+    --lm-border:        #E8E3DC;
+    --lm-surface:       #FFFFFF;
+  }
+
+  /* ── Header ────────────────────────────────────────────────── */
+  #header {
+    background: var(--lm-bg-sidebar);
+    color: var(--lm-bg-root);
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+  }
+
+  #branding h1 a:link,
+  #branding h1 a:visited {
+    color: var(--lm-bg-root);
+    text-decoration: none;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+
+  .lm-brand-name {
+    font-family: Inter, system-ui, sans-serif;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--lm-amber-500);
+    letter-spacing: -0.02em;
+  }
+
+  .lm-brand-suffix {
+    font-family: Inter, system-ui, sans-serif;
+    font-size: 0.75rem;
+    font-weight: 400;
+    color: var(--lm-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  #user-tools,
+  #user-tools a {
+    color: var(--lm-text-muted);
+    font-size: 0.8rem;
+  }
+
+  #user-tools a:hover {
+    color: var(--lm-amber-500);
+  }
+
+  /* ── Breadcrumbs ─────────────────────────────────────────── */
+  div.breadcrumbs {
+    background: var(--lm-border);
+    color: var(--lm-text-primary);
+    padding: 8px 24px;
+    font-size: 0.85rem;
+    border-bottom: 1px solid var(--lm-border);
+  }
+
+  div.breadcrumbs a {
+    color: var(--lm-amber-600);
+  }
+
+  div.breadcrumbs a:hover {
+    color: var(--lm-amber-700);
+  }
+
+  /* ── Body / Layout ─────────────────────────────────────────── */
+  body {
+    background: var(--lm-bg-root);
+    color: var(--lm-text-primary);
+    font-family: Inter, system-ui, sans-serif;
+  }
+
+  /* ── Module headers ────────────────────────────────────────── */
+  .module h2,
+  .module caption,
+  .inline-group h2 {
+    background: var(--lm-bg-sidebar);
+    color: var(--lm-bg-root);
+    padding: 8px 12px;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 600;
+    border-radius: 4px 4px 0 0;
+  }
+
+  /* ── Links ──────────────────────────────────────────────────── */
+  a:link,
+  a:visited {
+    color: var(--lm-amber-600);
+  }
+
+  a:hover,
+  a:focus {
+    color: var(--lm-amber-700);
+  }
+
+  /* ── Buttons / CTAs ─────────────────────────────────────────── */
+  .button,
+  input[type="submit"],
+  input[type="button"],
+  .submit-row input,
+  a.button {
+    background: var(--lm-amber-500);
+    color: var(--lm-bg-sidebar);
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.875rem;
+    padding: 8px 16px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+
+  .button:hover,
+  input[type="submit"]:hover,
+  a.button:hover {
+    background: var(--lm-amber-600);
+  }
+
+  .button.default,
+  .submit-row input.default {
+    background: var(--lm-amber-500);
+  }
+
+  /* ── Delete / danger buttons ────────────────────────────────── */
+  .deletelink,
+  .deletelink:visited {
+    color: #ef4444;
+  }
+
+  .deletelink:hover {
+    color: #dc2626;
+  }
+
+  /* ── Tables ─────────────────────────────────────────────────── */
+  #result_list thead th,
+  #result_list thead th a:link,
+  #result_list thead th a:visited {
+    background: var(--lm-bg-sidebar);
+    color: var(--lm-bg-root);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  #result_list tbody tr:nth-child(even) {
+    background: #F0EDE8;
+  }
+
+  #result_list tbody tr:hover {
+    background: #E8E3DC;
+  }
+
+  /* ── Sidebar nav ─────────────────────────────────────────────── */
+  #nav-sidebar .module {
+    border: 1px solid var(--lm-border);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+
+  #nav-sidebar a {
+    font-size: 0.875rem;
+    padding: 6px 12px;
+  }
+
+  /* ── Messages ─────────────────────────────────────────────────── */
+  .messagelist .success {
+    background: #D1FAE5;
+    border-left: 4px solid #10B981;
+    color: #065F46;
+  }
+
+  .messagelist .warning {
+    background: #FEF3C7;
+    border-left: 4px solid var(--lm-amber-500);
+    color: #92400E;
+  }
+
+  .messagelist .error {
+    background: #FEE2E2;
+    border-left: 4px solid #EF4444;
+    color: #991B1B;
+  }
+
+  /* ── Object tools ─────────────────────────────────────────────── */
+  .object-tools a {
+    background: var(--lm-bg-sidebar);
+    color: var(--lm-amber-500);
+    border-radius: 20px;
+    font-size: 0.8rem;
+    padding: 4px 12px;
+    text-decoration: none;
+    font-weight: 500;
+  }
+
+  .object-tools a:hover {
+    background: var(--lm-amber-600);
+    color: var(--lm-bg-root);
+  }
+
+  /* ── Dashboard app-list ─────────────────────────────────────── */
+  .app-ledger .model-invoice > th,
+  .app-ledger .model-journalentry > th {
+    padding-left: 12px;
+  }
+</style>
+{% endblock %}

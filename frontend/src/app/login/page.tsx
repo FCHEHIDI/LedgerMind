@@ -2,8 +2,8 @@
 
 import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { Eye, EyeOff } from "lucide-react";
 
-// Proxy via Next.js rewrites (/api/django/*) — évite le CORS en dev et prod
 const DJANGO_PROXY = "/api/django";
 
 export default function LoginPage() {
@@ -23,7 +23,6 @@ export default function LoginPage() {
       const res = await fetch(`${DJANGO_PROXY}/v1/auth/token/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // SimpleJWT attend "username" + "password" (modèle User Django standard)
         body: JSON.stringify({ username: email, password }),
       });
 
@@ -36,7 +35,6 @@ export default function LoginPage() {
       }
 
       const { access, refresh } = await res.json();
-      // Stocker via la route API Next.js pour cookies HTTP-only
       await fetch("/api/auth/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -52,14 +50,27 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950 px-4">
+    <div
+      className="min-h-screen flex items-center justify-center px-4"
+      style={{ background: "var(--bg-root)" }}
+    >
       <div className="w-full max-w-sm">
-        {/* Logo / titre */}
+        {/* Logo */}
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-            LedgerMind
-          </h1>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+          <div className="inline-flex items-center gap-2.5 mb-3">
+            <div
+              style={{ background: "var(--amber-500)", borderRadius: "10px" }}
+              className="flex h-9 w-9 items-center justify-center"
+            >
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <path d="M4 5h10M4 9h7M4 13h5" stroke="#131110" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+            </div>
+            <span className="text-xl font-semibold tracking-tight" style={{ color: "var(--text-primary)" }}>
+              <span style={{ color: "var(--amber-600)" }}>Ledger</span>Mind
+            </span>
+          </div>
+          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
             Connectez-vous à votre espace
           </p>
         </div>
@@ -67,21 +78,32 @@ export default function LoginPage() {
         <form
           onSubmit={handleSubmit}
           noValidate
-          className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-8 shadow-sm space-y-5"
+          className="rounded-2xl p-8 space-y-5"
+          style={{
+            background: "var(--bg-card)",
+            border: "1px solid var(--border)",
+            boxShadow: "var(--shadow-md)",
+          }}
         >
           {error && (
             <p
               role="alert"
-              className="rounded-lg bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-400"
+              className="rounded-lg px-4 py-3 text-sm"
+              style={{
+                background: "var(--danger-bg)",
+                border: "1px solid var(--danger-border)",
+                color: "var(--danger)",
+              }}
             >
               {error}
             </p>
           )}
 
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <label
               htmlFor="email"
-              className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+              className="block text-sm font-medium"
+              style={{ color: "var(--text-primary)" }}
             >
               Email
             </label>
@@ -92,15 +114,29 @@ export default function LoginPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-50 transition"
               placeholder="vous@example.com"
+              className="w-full rounded-lg px-3 py-2 text-sm outline-none transition-all"
+              style={{
+                background: "var(--bg-root)",
+                border: "1px solid var(--border)",
+                color: "var(--text-primary)",
+              }}
+              onFocus={(e) => {
+                e.target.style.border = "1px solid var(--amber-400)";
+                e.target.style.boxShadow = "0 0 0 3px rgba(245,158,11,0.12)";
+              }}
+              onBlur={(e) => {
+                e.target.style.border = "1px solid var(--border)";
+                e.target.style.boxShadow = "none";
+              }}
             />
           </div>
 
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <label
               htmlFor="password"
-              className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+              className="block text-sm font-medium"
+              style={{ color: "var(--text-primary)" }}
             >
               Mot de passe
             </label>
@@ -112,28 +148,31 @@ export default function LoginPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-2 pr-10 text-sm text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-50 transition"
                 placeholder="••••••••"
+                className="w-full rounded-lg px-3 py-2 pr-10 text-sm outline-none transition-all"
+                style={{
+                  background: "var(--bg-root)",
+                  border: "1px solid var(--border)",
+                  color: "var(--text-primary)",
+                }}
+                onFocus={(e) => {
+                  e.target.style.border = "1px solid var(--amber-400)";
+                  e.target.style.boxShadow = "0 0 0 3px rgba(245,158,11,0.12)";
+                }}
+                onBlur={(e) => {
+                  e.target.style.border = "1px solid var(--border)";
+                  e.target.style.boxShadow = "none";
+                }}
               />
               <button
                 type="button"
                 tabIndex={-1}
                 onClick={() => setShowPassword((v) => !v)}
                 aria-label={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
-                className="absolute right-2.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition"
+                className="absolute right-2.5 transition-colors"
+                style={{ color: "var(--text-tertiary)" }}
               >
-                {showPassword ? (
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
-                    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
-                    <line x1="1" y1="1" x2="23" y2="23"/>
-                  </svg>
-                ) : (
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                    <circle cx="12" cy="12" r="3"/>
-                  </svg>
-                )}
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
           </div>
@@ -141,12 +180,28 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-lg bg-zinc-900 dark:bg-zinc-50 px-4 py-2.5 text-sm font-semibold text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed transition"
+            className="w-full rounded-lg px-4 py-2.5 text-sm font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{
+              background: "var(--amber-600)",
+              color: "#fff",
+              boxShadow: "var(--shadow-amber)",
+            }}
+            onMouseEnter={(e) => {
+              if (!loading) e.currentTarget.style.background = "var(--amber-700)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "var(--amber-600)";
+            }}
           >
             {loading ? "Connexion…" : "Se connecter"}
           </button>
         </form>
+
+        <p className="mt-6 text-center text-xs" style={{ color: "var(--text-tertiary)" }}>
+          LedgerMind — Plateforme de comptabilité intelligente
+        </p>
       </div>
     </div>
   );
 }
+

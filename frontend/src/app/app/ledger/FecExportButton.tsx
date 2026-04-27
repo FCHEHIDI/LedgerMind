@@ -59,7 +59,14 @@ export default function FecExportButton() {
         onClick={handleDownload}
         disabled={loading}
         title="Exporter le Fichier des Écritures Comptables (FEC) pour l'année en cours"
-        className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-4 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        style={{
+          background: "var(--bg-card)",
+          border: "1px solid var(--border)",
+          color: "var(--text-primary)",
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--amber-400)")}
+        onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
       >
         {loading ? (
           <>
@@ -79,7 +86,7 @@ export default function FecExportButton() {
         )}
       </button>
       {error && (
-        <p className="text-xs text-red-500 dark:text-red-400 max-w-xs text-right">{error}</p>
+        <p className="text-xs max-w-xs text-right" style={{ color: "var(--danger)" }}>{error}</p>
       )}
     </div>
   );
